@@ -2,4 +2,16 @@
 .login-card { width: min(100%, 430px); padding: 48px; border: 1px solid #ffffff1c; border-radius: 24px; background: #171e2eeb; box-shadow: 0 30px 90px #0007; display: grid; gap: 17px; }
 .eyebrow { margin: 0; color: #80cbe8; font-size: .72rem; font-weight: 700; letter-spacing: .13em; }
 .login-card h1 { font: 600 2.35rem/1.04 Fraunces, serif; margin: 0; }.login-copy, small { color: #a9b4c8; line-height: 1.55; margin: 0; }.login-card label { color: #d8dfed; font-size: .85rem; font-weight: 600; display: grid; gap: 7px; }
-.login-card input { color: #fff; background: #0e1420; border: 1px solid #394359; border-radius: 10px; padding: 12px 13px; outline: none; }.login-card input:focus { border-color: #7ed5f4; box-shadow: 0 0 0 3px #68c9ee22; }.login-card button, .state button { border: 0; padding: 13px; border-radius: 10px; color: #061119; font-weight: 700; background: #86d8f2; }.login-card button:disabled { opacity: .65; cursor: wait; }.form-error { color: #ffb4ae; margin: 0; font-size: .9rem; }
+.login-card input { color: #fff; background: #0e1420; border: 1px solid #394359; border-radius: 10px; padding: 12px 13px; outline: none; }.login-card input:focus { border-color: #7ed5f4; box-shadow: 0 0 0 3px #68c9ee22; }.login-card input:disabled { opacity: .6; cursor: not-allowed; }.login-card button, .state button { border: 0; padding: 13px; border-radius: 10px; color: #061119; font-weight: 700; background: #86d8f2; }.login-card button:disabled { opacity: .65; cursor: wait; }.form-error { color: #ffb4ae; margin: 0; font-size: .9rem; }
+.text-button { background: none; border: none; color: #80cbe8; cursor: pointer; font-size: .85rem; padding: 0; text-align: left; text-decoration: underline; }
+.text-button:hover { color: #86d8f2; }
+.captcha-section { display: grid; gap: 10px; padding: 16px; background: #0e1420; border-radius: 12px; border: 1px solid #394359; }
+.captcha-label { color: #d8dfed; font-size: .85rem; font-weight: 600; margin: 0; }
+.captcha-image-container { display: flex; align-items: center; gap: 12px; }
+.captcha-image { max-width: 100%; height: auto; border-radius: 8px; border: 1px solid #394359; background: #fff; }
+.captcha-refresh { background: #171e2e; border: 1px solid #394359; border-radius: 8px; color: #80cbe8; cursor: pointer; font-size: 1.2rem; padding: 8px 12px; min-width: 44px; }
+.captcha-refresh:hover { background: #1e2636; border-color: #7ed5f4; }
+.captcha-loading { color: #a9b4c8; font-size: .9rem; padding: 20px; text-align: center; }
+.captcha-input { text-align: center; letter-spacing: 4px; font-size: 1.1rem; font-weight: 600; text-transform: uppercase; }
+.password-display { font-size: .85rem; }
+.password-mask { color: #a9b4c8; font-family: monospace; letter-spacing: 2px; margin-left: 8px; }

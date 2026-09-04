@@ -14,8 +14,14 @@ from app.services.credential_service import (
 from app.services.gitam_portal import (
     InvalidCredentials,
     PortalError,
-    authenticate,
-    fetch_current_data,
+    complete_login,
+    fetch_captcha_image,
+    init_captcha_session,
+)
+from app.services.captcha_session_store import (
+    create_captcha_session,
+    get_captcha_session,
+    remove_captcha_session,
 )
 
 from app.services.plan_service import (
@@ -64,6 +70,15 @@ class LoginRequest(BaseModel):
         max_length=256
     )
 
+
+class CaptchaLoginRequest(BaseModel):
+    token: str = Field(min_length=1, max_length=256)
+    captcha: str = Field(min_length=1, max_length=32)
+
+
+class CaptchaRefreshRequest(BaseModel):
+    token: str = Field(min_length=1, max_length=256)
+
 class PreferencesRequest(BaseModel):
     target_percentage: int = Field(ge=1, le=100)
     exam_date: date
@@ -94,23 +109,61 @@ def _plan_or_404(student_id):
     if not result: raise HTTPException(404, "No attendance data found. Sync after logging in.")
     return result
 
-@router.post("/login")
-def login(data: LoginRequest):
+@router.post("/login/init")
+def login_init(data: LoginRequest):
+    """Step 1: Initialize login - fetch CAPTCHA for manual entry."""
     try:
-        session = authenticate(data.username, data.password)
+        captcha_image, portal_session = init_captcha_session(data.username, data.password)
+        token = create_captcha_session(portal_session, data.username, data.password)
+        return {"captcha_image": captcha_image, "token": token}
+    except (PortalError, RuntimeError) as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
+
+
+@router.post("/login/complete")
+def login_complete(data: CaptchaLoginRequest):
+    """Step 2: Complete login with user-entered CAPTCHA."""
+    entry = get_captcha_session(data.token)
+    if entry is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "CAPTCHA session expired. Please try again.")
+
+    try:
+        session = complete_login(entry["session"], entry["username"], entry["password"], data.captcha)
     except InvalidCredentials as exc:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, str(exc)) from exc
     except (PortalError, RuntimeError) as exc:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
+    finally:
+        remove_captcha_session(data.token)
+
     now = datetime.now(timezone.utc)
     get_database().users.update_one(
-        {"student_id": data.username},
-        {"$set": {"username": data.username, "encryptedPassword": encrypt_password(data.password), "encryptionVersion": ENCRYPTION_VERSION, "lastLoginAt": now},
+        {"student_id": entry["username"]},
+        {"$set": {"username": entry["username"], "encryptedPassword": encrypt_password(entry["password"]), "encryptionVersion": ENCRYPTION_VERSION, "lastLoginAt": now},
          "$setOnInsert": {"target_percentage": 75, "notifications_enabled": False, "custom_target_date": (date.today() + timedelta(days=30)).isoformat()}},
-        upsert=True
+        upsert=True,
     )
-    save_session(data.username, session)
-    return {"token": create_access_token(data.username), "student_id": data.username, "needs_initial_sync": get_database().subjects.find_one({"student_id": data.username}) is None}
+    save_session(entry["username"], session)
+    return {"token": create_access_token(entry["username"]), "student_id": entry["username"], "needs_initial_sync": get_database().subjects.find_one({"student_id": entry["username"]}) is None}
+
+
+@router.post("/login/refresh-captcha")
+def refresh_captcha(data: CaptchaRefreshRequest):
+    """Refresh CAPTCHA without re-entering credentials."""
+    entry = get_captcha_session(data.token)
+    if entry is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "CAPTCHA session expired. Please try again.")
+    try:
+        captcha_image = fetch_captcha_image(entry["session"])
+        return {"captcha_image": captcha_image}
+    except PortalError as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
+
+
+@router.post("/login")
+def login(data: LoginRequest):
+    """Legacy single-step login (returns 410 Gone - use /login/init + /login/complete)."""
+    raise HTTPException(status.HTTP_410_GONE, "Please use the two-step login flow: POST /login/init then POST /login/complete")
 
 @router.post("/sync/{student_id}")
 def sync_data(student_id: str, user=Depends(verify_token)):

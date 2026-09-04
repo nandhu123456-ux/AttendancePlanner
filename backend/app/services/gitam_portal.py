@@ -1,3 +1,4 @@
+import base64
 import re
 import time
 import json
@@ -6,9 +7,6 @@ from typing import Any
 from urllib.parse import unquote, urljoin
 import requests
 from bs4 import BeautifulSoup
-import cv2
-import numpy as np
-import easyocr
 
 
 
@@ -46,159 +44,103 @@ def _input(soup: BeautifulSoup, name: str) -> str:
         raise PortalError("The college login form changed. Please try again later.")
     return element["value"]
 
-# Initialize OCR reader once (slow to create)
-_ocr_reader = None
 
-def _get_ocr_reader():
-    global _ocr_reader
-    if _ocr_reader is None:
-        _ocr_reader = easyocr.Reader(["en"], gpu=False)
-    return _ocr_reader
+def fetch_captcha_image(session: requests.Session) -> str:
+    """Fetch CAPTCHA image and return as base64 data URL."""
+    try:
+        response = session.get(
+            CAPTCHA_URL,
+            headers=_headers(Referer=LOGIN_URL),
+            timeout=10,
+        )
+        response.raise_for_status()
+        image_b64 = base64.b64encode(response.content).decode("utf-8")
+        return f"data:image/png;base64,{image_b64}"
+    except requests.RequestException as exc:
+        raise PortalError("Could not load CAPTCHA. Please try again.") from exc
+def init_captcha_session(username: str, password: str):
+    """Create a portal session and fetch CAPTCHA for manual entry."""
+    session = requests.Session()
+    try:
+        page = session.get(
+            LOGIN_URL,
+            headers=_headers(Accept=HTML_ACCEPT),
+            timeout=TIMEOUT,
+        )
+        page.raise_for_status()
+        captcha_image = fetch_captcha_image(session)
+        return captcha_image, session
+    except requests.RequestException as exc:
+        raise PortalError("The college portal is temporarily unavailable.") from exc
 
-def get_image_text(session: requests.Session, image_url: str) -> str:
-    response = session.get(
-        image_url,
-        headers=_headers(Referer=LOGIN_URL),
-        timeout=10
-    )
-    response.raise_for_status()
 
-    image_bytes = response.content
+def complete_login(session: requests.Session, username: str, password: str, captcha_text: str) -> requests.Session:
+    """Complete login with user-provided CAPTCHA text."""
+    try:
+        page = session.get(
+            LOGIN_URL,
+            headers=_headers(Accept=HTML_ACCEPT),
+            timeout=TIMEOUT,
+        )
+        page.raise_for_status()
 
-    image_array = np.frombuffer(
-        image_bytes,
-        dtype=np.uint8
-    )
+        soup = BeautifulSoup(page.text, "html.parser")
 
-    image = cv2.imdecode(
-        image_array,
-        cv2.IMREAD_COLOR
-    )
+        payload = {
+            "__EVENTTARGET": "",
+            "__EVENTARGUMENT": "",
+            "__VIEWSTATE": _input(soup, "__VIEWSTATE"),
+            "__VIEWSTATEGENERATOR": _input(soup, "__VIEWSTATEGENERATOR"),
+            "__VIEWSTATEENCRYPTED": "",
+            "__EVENTVALIDATION": _input(soup, "__EVENTVALIDATION"),
+            "hiddenCsrfToken": _input(soup, "hiddenCsrfToken"),
+            "txtusername": username,
+            "password": password,
+            "txtCaptchaInput": captcha_text.replace(" ", ""),
+            "Submit": "LOGIN",
+        }
 
-    if image is None:
-        raise ValueError("Could not decode image")
-
-    # Preprocess image for better OCR
-    # Step 1: Convert to grayscale
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-    # Step 2: Resize image (make it bigger for better OCR)
-    height, width = gray.shape[:2]
-    scale = 3
-    resized = cv2.resize(gray, (width * scale, height * scale), interpolation=cv2.INTER_CUBIC)
-
-    # Step 3: Apply bilateral filter to remove noise while keeping edges sharp
-    filtered = cv2.bilateralFilter(resized, 9, 75, 75)
-
-    # Step 4: Apply Otsu's thresholding
-    _, thresh = cv2.threshold(filtered, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-
-    # Step 5: Morphological operations to clean up
-    kernel = np.ones((2, 2), np.uint8)
-    thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
-    thresh = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel)
-
-    # Step 6: Add border (white space) around image for better OCR
-    thresh = cv2.copyMakeBorder(thresh, 20, 20, 20, 20, cv2.BORDER_CONSTANT, value=255)
-
-    reader = _get_ocr_reader()
-    results = reader.readtext(thresh)
-
-    texts = []
-    for bbox, text, confidence in results:
-        # Only include text with reasonable confidence
-        if confidence > 0.3:
-            texts.append(text)
-
-    return " ".join(texts)
-def authenticate(
-    username: str,
-    password: str,
-    session: requests.Session | None = None
-) -> requests.Session:
-    """Authenticate using credentials received from the frontend."""
-    max_login_retries = 3
-
-    for login_attempt in range(max_login_retries):
-        session = session or requests.Session()
-
-        try:
-            # 1. Load login page using the session
-            page = session.get(
-                LOGIN_URL,
-                headers=_headers(Accept=HTML_ACCEPT),
-                timeout=TIMEOUT
-            )
-
-            page.raise_for_status()
-
-            # 2. CAPTCHA IMAGE REQUEST
-            captcha_text = get_image_text(session, CAPTCHA_URL)
-            captcha_text = captcha_text.replace(" ", "")
-
-            # 3. Parse login page
-            soup = BeautifulSoup(page.text, "html.parser")
-
-            # 4. Build login payload
-            payload = {
-                "__EVENTTARGET": "",
-                "__EVENTARGUMENT": "",
-                "__VIEWSTATE": _input(soup, "__VIEWSTATE"),
-                "__VIEWSTATEGENERATOR": _input(
-                    soup,
-                    "__VIEWSTATEGENERATOR"
-                ),
-                "__VIEWSTATEENCRYPTED": "",
-                "__EVENTVALIDATION": _input(
-                    soup,
-                    "__EVENTVALIDATION"
-                ),
-                "hiddenCsrfToken": _input(
-                    soup,
-                    "hiddenCsrfToken"
-                ),
-
-                "txtusername": username,
-                "password": password,
-
-                # Keep CAPTCHA handling separate from automated login.
-                "txtCaptchaInput": captcha_text,
-
-                "Submit": "LOGIN",
-            }
-
-            response = session.post(LOGIN_URL, data=payload, headers=_headers(
+        response = session.post(
+            LOGIN_URL,
+            data=payload,
+            headers=_headers(
                 **{"Content-Type": "application/x-www-form-urlencoded", "Origin": "https://login.gitam.edu", "Referer": LOGIN_URL}
-            ), allow_redirects=False, timeout=TIMEOUT)
-            location = response.headers.get("Location")
-            if not location:
-                if login_attempt == max_login_retries - 1:
-                    raise InvalidCredentials("Invalid student ID, password, or an uncompleted portal CAPTCHA.")
-                # Wait before retry to allow CAPTCHA to refresh
-                time.sleep(2)
-                continue
-            redirect = urljoin(LOGIN_URL, location)
-            redirect_response = session.get(redirect, headers=_headers(Referer=LOGIN_URL), allow_redirects=True, timeout=TIMEOUT)
-            home = session.get(GSTUDENT_HOME_URL, headers=_headers(Referer=redirect_response.url), allow_redirects=True, timeout=TIMEOUT)
-            if "login.gitam.edu" in home.url.lower():
-                if login_attempt == max_login_retries - 1:
-                    raise InvalidCredentials("GStudent did not accept the portal login.")
-                # Wait before retry to allow CAPTCHA to refresh
-                time.sleep(2)
-                continue
-            sso_page = session.get(NEW_GLEARN_URL, headers=_headers(**{"Accept": "*/*", "X-Requested-With": "XMLHttpRequest", "Referer": GSTUDENT_HOME_URL}), allow_redirects=False, timeout=TIMEOUT)
-            match = re.search(r"window\.location\.href\s*=\s*['\"]([^'\"]+)['\"]", sso_page.text)
-            if not match:
-                raise PortalError("GLearn SSO could not be started. Please try again later.")
-            sso = session.get(urljoin(NEW_GLEARN_URL, match.group(1)), headers=_headers(Referer=GSTUDENT_HOME_URL), allow_redirects=True, timeout=TIMEOUT)
-            if "glearn.gitam.edu" not in sso.url.lower():
-                raise PortalError("GLearn SSO was not accepted.")
-            dashboard = session.get(f"{GLEARN}/student/std_dashboard_main", headers=_headers(Referer=sso.url), allow_redirects=True, timeout=TIMEOUT)
-            if "std_dashboard_main" not in dashboard.url:
-                raise PortalError("GLearn dashboard is not authenticated.")
-            return session
-        except requests.RequestException as exc:
-            raise PortalError("The college portal is temporarily unavailable.") from exc
+            ),
+            allow_redirects=False,
+            timeout=TIMEOUT,
+        )
+        location = response.headers.get("Location")
+        if not location:
+            raise InvalidCredentials("Invalid student ID, password, or CAPTCHA. Please try again.")
+
+        redirect = urljoin(LOGIN_URL, location)
+        redirect_response = session.get(redirect, headers=_headers(Referer=LOGIN_URL), allow_redirects=True, timeout=TIMEOUT)
+        home = session.get(GSTUDENT_HOME_URL, headers=_headers(Referer=redirect_response.url), allow_redirects=True, timeout=TIMEOUT)
+
+        if "login.gitam.edu" in home.url.lower():
+            raise InvalidCredentials("Portal login failed. Please check your credentials and CAPTCHA.")
+
+        sso_page = session.get(
+            NEW_GLEARN_URL,
+            headers=_headers(**{"Accept": "*/*", "X-Requested-With": "XMLHttpRequest", "Referer": GSTUDENT_HOME_URL}),
+            allow_redirects=False,
+            timeout=TIMEOUT,
+        )
+        match = re.search(r"window\.location\.href\s*=\s*['\"]([^'\"]+)['\"]", sso_page.text)
+        if not match:
+            raise PortalError("GLearn SSO could not be started. Please try again later.")
+
+        sso = session.get(urljoin(NEW_GLEARN_URL, match.group(1)), headers=_headers(Referer=GSTUDENT_HOME_URL), allow_redirects=True, timeout=TIMEOUT)
+        if "glearn.gitam.edu" not in sso.url.lower():
+            raise PortalError("GLearn SSO was not accepted.")
+
+        dashboard = session.get(f"{GLEARN}/student/std_dashboard_main", headers=_headers(Referer=sso.url), allow_redirects=True, timeout=TIMEOUT)
+        if "std_dashboard_main" not in dashboard.url:
+            raise PortalError("GLearn dashboard is not authenticated.")
+
+        return session
+    except requests.RequestException as exc:
+        raise PortalError("The college portal is temporarily unavailable.") from exc
 
 
 def _number(value: Any, default: int = 0) -> int:

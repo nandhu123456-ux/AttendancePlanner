@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import unittest
 from unittest.mock import Mock, patch
 
-from services.gitam_portal import authenticate, fetch_current_data, parse_attendance_html, parse_subjects, parse_timetable
+from services.gitam_portal import complete_login, fetch_current_data, init_captcha_session, parse_attendance_html, parse_subjects, parse_timetable
 
 
 class Response:
@@ -26,9 +26,8 @@ class PortalParsingTests(unittest.TestCase):
         session = Mock()
         session.post.return_value = Response(headers={"Location": "/callback"})
         session.get.side_effect = [Response(text=login_form), Response(url="https://login.gitam.edu/callback"), Response(url="https://gstudent.gitam.edu/Home"), Response(text="window.location.href='https://glearn.gitam.edu/sso'"), Response(url="https://glearn.gitam.edu/sso"), Response(url="https://glearn.gitam.edu/student/std_dashboard_main")]
-        with patch("services.gitam_portal.get_image_text", return_value="ABC123"):
-            self.assertIs(authenticate("student", "password", session), session)
-        self.assertEqual(session.get.call_count, 6)
+        self.assertIs(complete_login(session, "student", "password", "ABC123"), session)
+        self.assertEqual(session.get.call_count, 5)
 
 
     def test_fetches_subject_json_and_timetable_from_authenticated_glearn(self):

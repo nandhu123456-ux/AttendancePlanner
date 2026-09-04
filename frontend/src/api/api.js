@@ -17,7 +17,9 @@ API.interceptors.response.use((response) => response, (error) => {
   return Promise.reject(error);
 });
 
-export const login = (credentials) => API.post("/login", credentials);
+export const loginInit = (credentials) => API.post("/login/init", credentials);
+export const loginComplete = (data) => API.post("/login/complete", data);
+export const refreshCaptcha = (data) => API.post("/login/refresh-captcha", data);
 export const sync = (studentId) => API.post(`/sync/${studentId}`);
 export const getPlanner = (studentId) => API.get(`/planner/${studentId}`);
 export const getHistory = (studentId) => API.get(`/history/${studentId}`);
