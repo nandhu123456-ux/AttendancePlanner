@@ -18,8 +18,13 @@ def get_database():
 
 def ensure_indexes():
     """Constraints for current, normalized portal data."""
-    db.subjects.create_index([("student_id", ASCENDING), ("subjectCode", ASCENDING)], unique=True, name="subject_student_code")
-    db.timetable_slots.create_index([("student_id", ASCENDING), ("dayOfWeek", ASCENDING), ("startTime", ASCENDING), ("endTime", ASCENDING), ("subjectCode", ASCENDING)], unique=True, name="timetable_slot_identity")
-    db.planner_results.create_index("student_id", unique=True, name="planner_student")
-    db.users.create_index("student_id", unique=True, name="user_student")
-    db.adjustment_log.create_index([("student_id", ASCENDING), ("timestamp", ASCENDING)], name="adjustment_student_time")
+    try:
+        db.subjects.create_index([("student_id", ASCENDING), ("subjectCode", ASCENDING)], unique=True, name="subject_student_code")
+        db.timetable_slots.create_index([("student_id", ASCENDING), ("dayOfWeek", ASCENDING), ("startTime", ASCENDING), ("endTime", ASCENDING), ("subjectCode", ASCENDING)], unique=True, name="timetable_slot_identity")
+        db.planner_results.create_index("student_id", unique=True, name="planner_student")
+        db.users.create_index("student_id", unique=True, name="user_student")
+        db.adjustment_log.create_index([("student_id", ASCENDING), ("timestamp", ASCENDING)], name="adjustment_student_time")
+    except Exception:
+        # Index creation failures should not prevent the app from starting.
+        # Indexes may already exist or the user may lack permissions.
+        pass
