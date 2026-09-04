@@ -2,11 +2,14 @@ import base64
 import re
 import time
 import json
+import logging
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import unquote, urljoin
 import requests
 from bs4 import BeautifulSoup
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -45,6 +48,30 @@ def _input(soup: BeautifulSoup, name: str) -> str:
     return element["value"]
 
 
+def _parse_form_fields(session: requests.Session) -> dict:
+    """Fetch login page and extract form fields needed for login submission."""
+    page = session.get(
+        LOGIN_URL,
+        headers=_headers(Accept=HTML_ACCEPT),
+        timeout=TIMEOUT,
+    )
+    page.raise_for_status()
+    soup = BeautifulSoup(page.text, "html.parser")
+    return {
+        "__VIEWSTATE": _input(soup, "__VIEWSTATE"),
+        "__VIEWSTATEGENERATOR": _input(soup, "__VIEWSTATEGENERATOR"),
+        "__EVENTVALIDATION": _input(soup, "__EVENTVALIDATION"),
+        "hiddenCsrfToken": _input(soup, "hiddenCsrfToken"),
+    }
+
+
+def refresh_captcha_and_fields(session: requests.Session):
+    """Fetch fresh form fields and CAPTCHA image. Returns (captcha_image_base64, form_fields)."""
+    form_fields = _parse_form_fields(session)
+    captcha_image = fetch_captcha_image(session)
+    return captcha_image, form_fields
+
+
 def fetch_captcha_image(session: requests.Session) -> str:
     """Fetch CAPTCHA image and return as base64 data URL."""
     try:
@@ -59,41 +86,32 @@ def fetch_captcha_image(session: requests.Session) -> str:
     except requests.RequestException as exc:
         raise PortalError("Could not load CAPTCHA. Please try again.") from exc
 def init_captcha_session(username: str, password: str):
-    """Create a portal session and fetch CAPTCHA for manual entry."""
+    """Create a portal session, fetch CAPTCHA and form fields for manual entry.
+    Returns (captcha_image_base64, portal_session, form_fields).
+    """
     session = requests.Session()
     try:
-        page = session.get(
-            LOGIN_URL,
-            headers=_headers(Accept=HTML_ACCEPT),
-            timeout=TIMEOUT,
-        )
-        page.raise_for_status()
+        form_fields = _parse_form_fields(session)
         captcha_image = fetch_captcha_image(session)
-        return captcha_image, session
+        logger.info("INIT: CAPTCHA session created for user=%s, session=%s", username, id(session))
+        return captcha_image, session, form_fields
     except requests.RequestException as exc:
+        logger.error("INIT: Failed to create CAPTCHA session for user=%s: %s", username, type(exc).__name__)
         raise PortalError("The college portal is temporarily unavailable.") from exc
 
 
-def complete_login(session: requests.Session, username: str, password: str, captcha_text: str) -> requests.Session:
-    """Complete login with user-provided CAPTCHA text."""
+def complete_login(session: requests.Session, username: str, password: str, captcha_text: str, form_fields: dict) -> requests.Session:
+    """Complete login with user-provided CAPTCHA text and pre-fetched form fields."""
     try:
-        page = session.get(
-            LOGIN_URL,
-            headers=_headers(Accept=HTML_ACCEPT),
-            timeout=TIMEOUT,
-        )
-        page.raise_for_status()
-
-        soup = BeautifulSoup(page.text, "html.parser")
-
+        logger.info("COMPLETE: Starting login for user=%s, session=%s", username, id(session))
         payload = {
             "__EVENTTARGET": "",
             "__EVENTARGUMENT": "",
-            "__VIEWSTATE": _input(soup, "__VIEWSTATE"),
-            "__VIEWSTATEGENERATOR": _input(soup, "__VIEWSTATEGENERATOR"),
+            "__VIEWSTATE": form_fields["__VIEWSTATE"],
+            "__VIEWSTATEGENERATOR": form_fields["__VIEWSTATEGENERATOR"],
             "__VIEWSTATEENCRYPTED": "",
-            "__EVENTVALIDATION": _input(soup, "__EVENTVALIDATION"),
-            "hiddenCsrfToken": _input(soup, "hiddenCsrfToken"),
+            "__EVENTVALIDATION": form_fields["__EVENTVALIDATION"],
+            "hiddenCsrfToken": form_fields["hiddenCsrfToken"],
             "txtusername": username,
             "password": password,
             "txtCaptchaInput": captcha_text.replace(" ", ""),
@@ -110,6 +128,7 @@ def complete_login(session: requests.Session, username: str, password: str, capt
             timeout=TIMEOUT,
         )
         location = response.headers.get("Location")
+        logger.info("COMPLETE: Login response status=%s, has_location=%s", response.status_code, bool(location))
         if not location:
             raise InvalidCredentials("Invalid student ID, password, or CAPTCHA. Please try again.")
 

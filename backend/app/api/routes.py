@@ -1,10 +1,13 @@
 import os
+import logging
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from app.config.database import get_database
+
+logger = logging.getLogger(__name__)
 
 from app.services.credential_service import (
     ENCRYPTION_VERSION,
@@ -16,7 +19,9 @@ from app.services.gitam_portal import (
     PortalError,
     complete_login,
     fetch_captcha_image,
+    fetch_current_data,
     init_captcha_session,
+    refresh_captcha_and_fields,
 )
 from app.services.captcha_session_store import (
     create_captcha_session,
@@ -113,10 +118,12 @@ def _plan_or_404(student_id):
 def login_init(data: LoginRequest):
     """Step 1: Initialize login - fetch CAPTCHA for manual entry."""
     try:
-        captcha_image, portal_session = init_captcha_session(data.username, data.password)
-        token = create_captcha_session(portal_session, data.username, data.password)
+        captcha_image, portal_session, form_fields = init_captcha_session(data.username, data.password)
+        token = create_captcha_session(portal_session, data.username, data.password, form_fields)
+        logger.info("INIT: Created CAPTCHA session token=%s for user=%s", token[:8] + "...", data.username)
         return {"captcha_image": captcha_image, "token": token}
     except (PortalError, RuntimeError) as exc:
+        logger.error("INIT: Failed for user=%s: %s", data.username, type(exc).__name__)
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
 
 
@@ -125,16 +132,25 @@ def login_complete(data: CaptchaLoginRequest):
     """Step 2: Complete login with user-entered CAPTCHA."""
     entry = get_captcha_session(data.token)
     if entry is None:
+        logger.warning("COMPLETE: Session not found for token=%s", data.token[:8] + "...")
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "CAPTCHA session expired. Please try again.")
 
+    logger.info("COMPLETE: Found session for user=%s, session=%s", entry["username"], id(entry["session"]))
+
     try:
-        session = complete_login(entry["session"], entry["username"], entry["password"], data.captcha)
+        session = complete_login(entry["session"], entry["username"], entry["password"], data.captcha, entry["form_fields"])
     except InvalidCredentials as exc:
+        logger.warning("COMPLETE: Invalid credentials for user=%s: %s", entry["username"], str(exc))
+        # Don't remove session on wrong CAPTCHA - allow retry
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, str(exc)) from exc
     except (PortalError, RuntimeError) as exc:
+        logger.error("COMPLETE: Portal error for user=%s: %s", entry["username"], type(exc).__name__)
+        # Don't remove session on portal error - allow retry
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
-    finally:
-        remove_captcha_session(data.token)
+
+    # Only remove session on success
+    remove_captcha_session(data.token)
+    logger.info("COMPLETE: Login successful for user=%s", entry["username"])
 
     now = datetime.now(timezone.utc)
     get_database().users.update_one(
@@ -152,11 +168,19 @@ def refresh_captcha(data: CaptchaRefreshRequest):
     """Refresh CAPTCHA without re-entering credentials."""
     entry = get_captcha_session(data.token)
     if entry is None:
+        logger.warning("REFRESH: Session not found for token=%s", data.token[:8] + "...")
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "CAPTCHA session expired. Please try again.")
+
+    logger.info("REFRESH: Found session for user=%s", entry["username"])
     try:
-        captcha_image = fetch_captcha_image(entry["session"])
+        # Re-fetch login page to get fresh form fields and CAPTCHA
+        captcha_image, form_fields = refresh_captcha_and_fields(entry["session"])
+        # Update stored form fields
+        entry["form_fields"] = form_fields
+        logger.info("REFRESH: CAPTCHA refreshed for user=%s", entry["username"])
         return {"captcha_image": captcha_image}
     except PortalError as exc:
+        logger.error("REFRESH: Failed for user=%s: %s", entry["username"], type(exc).__name__)
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
 
 

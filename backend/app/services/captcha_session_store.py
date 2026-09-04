@@ -2,12 +2,12 @@ import secrets
 import time
 from threading import Timer
 
-# Temporary CAPTCHA sessions: token -> {session, username, password, created_at}
+# Temporary CAPTCHA sessions: token -> {session, username, password, form_fields, created_at}
 _captcha_sessions = {}
 SESSION_TIMEOUT = 300  # 5 minutes
 
 
-def create_captcha_session(session, username: str, password: str) -> str:
+def create_captcha_session(session, username: str, password: str, form_fields: dict) -> str:
     """Store temporary portal session for CAPTCHA flow. Returns a short-lived token."""
     cleanup_expired()
     token = secrets.token_urlsafe(32)
@@ -15,6 +15,7 @@ def create_captcha_session(session, username: str, password: str) -> str:
         "session": session,
         "username": username,
         "password": password,
+        "form_fields": form_fields,
         "created_at": time.time(),
     }
     return token
