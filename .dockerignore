@@ -1,0 +1,32 @@
+# Build context: repo root
+
+# Local/environment
+.git
+.gitignore
+venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+*.log
+debug_test.log
+test_import.py
+_docker_check.txt
+_deploy_check.txt
+captcha.png
+test_image.png
+
+# Secrets must never enter the image build context
+backend/.env
+backend/.env.example
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+
+# Node/Python artifacts (rebuilt inside the image)
+frontend/node_modules/
+frontend/dist/
+backend/**/test/
+
+# IDE
+.idea/
+.vscode/

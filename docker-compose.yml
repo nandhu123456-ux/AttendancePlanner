@@ -1,0 +1,27 @@
+# Deploy the whole Attendance Planner (API + React frontend) as a single
+# service. Reads configuration from backend/.env (DATABASE_URL, SECRET_KEY,
+# CREDENTIAL_ENCRYPTION_KEY, etc.).
+#
+# Usage:
+#   docker compose up -d --build
+#
+# For a fully self-hosted stack you can point DATABASE_URL at an also-compose
+# MongoDB container; by default use a managed service such as MongoDB Atlas.
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: attendance-planner
+    env_file:
+      - backend/.env
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 60s
+      timeout: 10s
+      retries: 5
+      start_period: 15s

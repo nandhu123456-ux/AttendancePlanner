@@ -1,0 +1,30 @@
+# Render Blueprint — deploys the single Docker image (API + frontend).
+# Docs: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: attendance-planner
+    runtime: docker
+    repo: https://github.com/your-username/AttendancePlanner   # replace with your repo
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: DATABASE_URL
+        sync: false                                  # set manually (Atlas connection string)
+      - key: DATABASE_NAME
+        value: attendance_planner
+      - key: SECRET_KEY
+        sync: false                                  # set manually
+      - key: CREDENTIAL_ENCRYPTION_KEY
+        sync: false                                  # set manually
+      - key: TOKEN_EXPIRE_HOURS
+        value: 8
+      - key: MAX_CUSTOM_ADJUSTMENTS_PER_MONTH
+        value: 4
+      - key: PLANNER_CAMPUS
+        value: BLR
+      - key: PLANNER_TIMEZONE
+        value: Asia/Kolkata
+      - key: CORS_ORIGINS
+        value: ""                                    # same-origin serving, CORS not needed
+      - key: FRONTEND_DIST
+        value: /frontend/dist
