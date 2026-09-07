@@ -287,6 +287,7 @@ def parse_timetable(html: str, subjects: list[dict]) -> list[dict]:
     if not headers or "Monday" not in headers:
         raise PortalError("GLearn timetable columns changed.")
     known_by_code = {item["subjectCode"].lower(): item for item in subjects}
+    known_by_name = {" ".join(item["subjectName"].lower().split()): item for item in subjects}
     result, seen = [], set()
     for row in table.select("tbody tr"):
         cells = row.find_all(["td", "th"])
@@ -306,15 +307,54 @@ def parse_timetable(html: str, subjects: list[dict]) -> list[dict]:
             sorted_codes = sorted(known_by_code.items(), key=lambda x: len(x[0]), reverse=True)
             subject = next((item for code, item in sorted_codes if code in normalized_raw), None)
             if not subject:
-                subject = next((item for item in subjects if " ".join(item["subjectName"].lower().split()) in normalized_raw), None)
+                subject = next((item for name, item in known_by_name.items() if name in normalized_raw), None)
             if not subject:
-                continue
+                # Try to extract subject code from cell text using regex pattern
+                code_match = _SUBJECT_CODE_RE.search(raw)
+                if code_match:
+                    extracted_code = re.sub(r"[^A-Za-z0-9]", "", code_match.group(0)).upper()
+                    # Use extracted code and the full cell text as subject name
+                    subject = {"subjectCode": extracted_code, "subjectName": raw.strip()}
+                else:
+                    # Use the cell text as both code and name for unmatched subjects
+                    clean_raw = raw.strip()
+                    if clean_raw:
+                        subject = {"subjectCode": clean_raw, "subjectName": clean_raw}
+                    else:
+                        continue
             item = {"dayOfWeek": day, "startTime": start, "endTime": end,
                     "subjectCode": subject["subjectCode"], "subjectName": subject["subjectName"]}
             key = tuple(item.values())
             if key not in seen:
                 seen.add(key); result.append(item)
     return result
+
+
+def merge_subjects_from_timetable(attendance_subjects: list[dict], timetable_slots: list[dict]) -> list[dict]:
+    """Merge subjects from timetable with attendance subjects.
+
+    Ensures all subjects that appear in the timetable are included in the subjects list,
+    even if they don't have attendance data yet.
+    """
+    # Create a map of existing attendance subjects by code
+    subject_map = {item["subjectCode"].lower(): item for item in attendance_subjects}
+
+    # Add any subjects from timetable that aren't in attendance data
+    for slot in timetable_slots:
+        code = slot.get("subjectCode", "").lower()
+        name = slot.get("subjectName", "")
+        if code and code not in subject_map:
+            # Add placeholder subject for timetable-only subjects
+            subject_map[code] = {
+                "subjectCode": slot["subjectCode"],
+                "subjectName": name,
+                "totalClasses": 0,
+                "presentClasses": 0,
+                "absentClasses": 0,
+                "percentage": 0.0
+            }
+
+    return list(subject_map.values())
 
 
 def _refresh_glearn_session(session: requests.Session) -> requests.Session:
@@ -410,7 +450,10 @@ def fetch_current_data(session: requests.Session) -> PortalData:
         try:
             timetable = session.get(f"{GLEARN}/student/std_timetable", headers=_headers(Accept=HTML_ACCEPT, Referer=attendance.url), allow_redirects=True, timeout=TIMEOUT)
             if "std_timetable" not in timetable.url: raise PortalError("GLearn timetable page is unavailable.")
-            return PortalData(subjects=subjects, timetable=parse_timetable(timetable.text, subjects))
+            parsed_timetable = parse_timetable(timetable.text, subjects)
+            # Merge subjects from timetable with attendance subjects to ensure all timetable subjects are included
+            merged_subjects = merge_subjects_from_timetable(subjects, parsed_timetable)
+            return PortalData(subjects=merged_subjects, timetable=parsed_timetable)
         except (PortalError, requests.RequestException):
             # Attendance has already been safely fetched; retain a valid old timetable.
             return PortalData(subjects=subjects, timetable=None, timetable_error="Timetable synchronization failed")

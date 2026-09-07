@@ -50,7 +50,14 @@ export default function Settings() {
     <main className="dashboard">
       <header>
         <div>
-          <p className="eyebrow">ACCOUNT & PREDICTION</p>
+          <div className="brand-header-inline">
+            <svg width="24" height="24" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M20 4L4 14v12l16 10 16-10V14L20 4z" stroke="currentColor" strokeWidth="2" fill="none"/>
+              <path d="M20 4v32M4 14l16 10 16-10M4 26l16-10 16 10" stroke="currentColor" strokeWidth="1.5" fill="none"/>
+              <circle cx="20" cy="18" r="4" fill="currentColor"/>
+            </svg>
+            <p className="eyebrow">TRACK_75</p>
+          </div>
           <h1>Settings</h1>
         </div>
         <Nav />
@@ -68,7 +75,7 @@ export default function Settings() {
           {datePicker.max_date ? ` · Valid range: ${datePicker.min_date} to ${datePicker.max_date}` : ""}
         </p>
 
-        <label className="toggle"><input type="checkbox" checked={settings.notifications_enabled} onChange={(e) => setSettings({ ...settings, notifications_enabled: e.target.checked })} /> Enable future notifications</label>
+        {/* Notifications toggle hidden from UI */}
         {message && <p className="form-error">{message}</p>}
         <button disabled={saving} type="submit">{saving ? "Calculating…" : "Calculate prediction"}</button>
         <button className="quiet" type="button" onClick={logout}>Sign out on this device</button>

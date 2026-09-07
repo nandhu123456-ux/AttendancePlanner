@@ -35,8 +35,6 @@ export default function Dashboard() {
   if (!data) return <main className="state"><div className="spinner" /><p>Building your attendance plan…</p></main>;
 
   const { overall, warnings } = data;
-  const syncDate = data.sync_status?.last_portal_sync_at;
-  const syncLabel = "Portal data last updated";
   const calInfo = data.calendar_info || {};
 
   const getAttendanceStatus = (pct, target) => {
@@ -49,19 +47,27 @@ export default function Dashboard() {
     <main className="dashboard">
       <header className="dashboard-header">
         <div>
-          <p className="eyebrow">YOUR ATTENDANCE OUTLOOK</p>
-          <h1>Attendance Planner</h1>
+          <div className="brand-header-inline">
+            <svg width="28" height="28" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M20 4L4 14v12l16 10 16-10V14L20 4z" stroke="currentColor" strokeWidth="2" fill="none"/>
+              <path d="M20 4v32M4 14l16 10 16-10M4 26l16-10 16 10" stroke="currentColor" strokeWidth="1.5" fill="none"/>
+              <circle cx="20" cy="18" r="4" fill="currentColor"/>
+            </svg>
+            <p className="eyebrow">TRACK_75</p>
+          </div>
+          <h1>Dashboard</h1>
           {calInfo.sessional && (
             <p className="sessional-badge">
-              Targeting {calInfo.sessional.replace("_", "-").toUpperCase()}
+              {calInfo.academic_year && (
+                <span className="academic-year-badge">{calInfo.academic_year} ({calInfo.semester_type || "ODD"})</span>
+              )}
+              <span>Targeting {calInfo.sessional.replace("_", "-").toUpperCase()}</span>
               {calInfo.sessional_end ? ` · ends ${calInfo.sessional_end}` : ""}
             </p>
           )}
-          <p className="sync-note">{syncDate ? `${syncLabel}: ${new Date(syncDate).toLocaleString()}` : "No portal data has been synced yet."}</p>
         </div>
         <div className="nav-actions">
           <Nav />
-          <button className="quiet" onClick={logout}>Sign out</button>
         </div>
       </header>
 
@@ -79,21 +85,21 @@ export default function Dashboard() {
 
       <section className="metrics">
         <Metric
-          label="Current attendance"
+          label="Current"
           value={`${overall.current_percentage}%`}
-          hint={`Present ${overall.present_classes} / Total ${overall.total_classes} · Absent ${overall.absent_classes}`}
+          hint={`Present ${overall.present_classes} / Total ${overall.total_classes}`}
           status={getAttendanceStatus(overall.current_percentage, overall.target_percentage)}
         />
         <Metric label="Target" value={`${overall.target_percentage}%`} hint="Your goal" />
         <Metric
-          label="Classes remaining"
+          label="Remaining"
           value={overall.future_classes}
-          hint={data.exam_date ? `Through ${data.exam_date}` : "Set target date"}
+          hint={data.exam_date ? <span>Through <strong className="date-highlight">{data.exam_date}</strong></span> : "Set target date"}
         />
         <Metric
-          label="After attending all"
+          label="Projected"
           value={`${overall.after_attending_all}%`}
-          hint="Projected final"
+          hint="If you attend all"
           status={overall.target_reachable_in_window ? "good" : "warning"}
         />
         <Metric
@@ -109,18 +115,24 @@ export default function Dashboard() {
         />
       </section>
 
-      {calInfo.blocked_dates_count > 0 && (
-        <section className="calendar-info">
-          <p className="muted">{calInfo.blocked_dates_count} non-instructional days excluded from future classes.</p>
-        </section>
-      )}
+      <section className="calendar-info">
+        <Link to="/settings" className="change-date-control">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+            <line x1="16" y1="2" x2="16" y2="6"/>
+            <line x1="8" y1="2" x2="8" y2="6"/>
+            <line x1="3" y1="10" x2="21" y2="10"/>
+          </svg>
+          Change prediction date
+        </Link>
+      </section>
 
       <section className="dashboard-actions">
         <div>
           <h2>Subject details</h2>
           <p>View attendance, future classes, safe skips, and required attendance for every subject.</p>
         </div>
-        <Link to="/subjects">View subject details</Link>
+        <Link to="/subjects">View all subjects</Link>
       </section>
 
       {warnings.length > 0 && (
