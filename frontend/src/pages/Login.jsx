@@ -231,8 +231,10 @@ export default function Login() {
               : "Sign in"}
         </button>
 
-        <small>Your portal password is encrypted server-side so attendance can refresh securely.</small>
+        <small>No password is stored,Dont worry.</small>
       </form>
     </main>
   );
 }
+git commit -m "Polish dark theme and dashboard UI"
+git push origin master
