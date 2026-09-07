@@ -236,5 +236,4 @@ export default function Login() {
     </main>
   );
 }
-git commit -m "Polish dark theme and dashboard UI"
-git push origin master
+
