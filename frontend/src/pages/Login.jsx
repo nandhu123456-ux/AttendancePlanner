@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { loginInit, loginComplete, refreshCaptcha, sync } from "../api/api";
+import { loginInit, loginComplete, refreshCaptcha } from "../api/api";
 import "./Login.css";
 
 export default function Login() {
@@ -90,19 +90,14 @@ export default function Login() {
       localStorage.setItem("student_id", data.student_id);
       // Save username for future quick login
       saveUser(username.trim());
-      // The backend already refreshed the latest attendance during login
-      // (data.auto_sync). Only fall back to an explicit sync if the server
-      // could not run it. Either way, never log the user out over a sync
-      // problem - attendance will refresh again on the next login.
+      // The backend already refreshed the latest attendance during login.
+      // If it could not, the user can log in again to refresh - attendance
+      // is always re-fetched from GITAM at every successful login.
       if (!data.auto_sync) {
-        try {
-          await sync(data.student_id);
-        } catch {
-          sessionStorage.setItem(
-            "predictionUpdated",
-            "Signed in, but attendance could not be refreshed automatically. It will refresh on your next login."
-          );
-        }
+        sessionStorage.setItem(
+          "predictionUpdated",
+          "Signed in, but attendance could not be refreshed automatically. It will refresh on your next login."
+        );
       }
       navigate("/dashboard", { replace: true });
     } catch (err) {

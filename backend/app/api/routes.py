@@ -23,7 +23,6 @@ from app.services.gitam_portal import (
     init_captcha_session,
     refresh_captcha_and_fields,
 )
-from app.services.gitam_portal import _refresh_glearn_session as refresh_glearn_session
 from app.services.captcha_session_store import (
     create_captcha_session,
     get_captcha_session,
@@ -44,11 +43,7 @@ from app.services.security import (
     verify_token,
 )
 
-from app.services.session_store import (
-    get_session,
-    save_session,
-    remove_session,
-)
+from app.services.session_store import save_session
 
 from app.services.sync_service import sync_portal_data
 
@@ -167,7 +162,7 @@ def login_complete(data: CaptchaLoginRequest):
     # just-authenticated portal session to fetch the latest subject-level data
     # and sync the database BEFORE the frontend navigates to the dashboard.
     # Best-effort only: if the portal hiccups here, the login itself still
-    # succeeds and the frontend falls back to POST /sync/{student_id}.
+    # succeeds and the user can log in again to refresh attendance.
     auto_sync = None
     try:
         portal_data = fetch_current_data(session)
@@ -179,7 +174,7 @@ def login_complete(data: CaptchaLoginRequest):
         )
     except Exception:
         # Never fail the login itself because of a sync problem.
-        logger.warning("AUTO-SYNC: deferred for user=%s; frontend will retry via /sync", entry["username"])
+        logger.warning("AUTO-SYNC: deferred for user=%s; attendance will refresh on next login", entry["username"])
 
     return {
         "token": create_access_token(entry["username"]),
@@ -214,45 +209,6 @@ def refresh_captcha(data: CaptchaRefreshRequest):
 def login(data: LoginRequest):
     """Legacy single-step login (returns 410 Gone - use /login/init + /login/complete)."""
     raise HTTPException(status.HTTP_410_GONE, "Please use the two-step login flow: POST /login/init then POST /login/complete")
-
-@router.post("/sync/{student_id}")
-def sync_data(student_id: str, user=Depends(verify_token)):
-    _student_for(student_id, user)
-    session = get_session(student_id)
-    logger.info("SYNC: user=%s session_available=%s", student_id, session is not None)
-    if session is None:
-        # Portal sessions live in memory and are lost on restart/redeploy. The
-        # GITAM login requires a manually-entered CAPTCHA, so a brand-new
-        # authenticated session can only be established by a fresh login.
-        raise HTTPException(401, "Portal session expired. Please log in again.")
-    try:
-        try:
-            portal_data = fetch_current_data(session)
-        except PortalError:
-            # The GLearn SSO may have lapsed even though the main portal
-            # session is still valid. Re-run the SSO handshake once (no
-            # CAPTCHA needed) and retry before asking the user to log in.
-            logger.info("SYNC: user=%s attendance fetch failed; refreshing GLearn SSO", student_id)
-            session = refresh_glearn_session(session)
-            save_session(student_id, session)
-            portal_data = fetch_current_data(session)
-        status_data = sync_portal_data(student_id, portal_data)
-        logger.info(
-            "SYNC: user=%s subjects received=%s subjects changed=%s attendance=%s",
-            student_id, len(portal_data.subjects or []),
-            status_data.get("subjectsChanged", 0), status_data.get("attendance"),
-        )
-        result = build_plan_from_database(student_id)
-    except PortalError as exc:
-        # The session could not be recovered; drop it so the next attempt is a
-        # clean re-login (CAPTCHA is manual, so re-auth cannot be automatic).
-        remove_session(student_id)
-        logger.warning("SYNC: user=%s portal session unrecoverable (%s); removed", student_id, type(exc).__name__)
-        raise HTTPException(401, "Portal session expired. Please log in again.") from exc
-    except ValueError as exc:
-        # Return sync status even if plan building fails (e.g., no target date set)
-        return {"message": "Attendance synchronized but plan needs configuration", "sync": status_data, "error": str(exc), "needs_target_date": True}
-    return {"message": "Attendance synchronized", "sync": status_data, "result": result}
 
 @router.get("/planner/{student_id}")
 def get_planner(student_id: str, user=Depends(verify_token)):

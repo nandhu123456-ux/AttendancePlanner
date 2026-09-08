@@ -10,7 +10,7 @@ FastAPI and React attendance planner using the GITAM Login → GStudent → GLea
 
 ## Data flow
 
-`POST /login` establishes one requests session across Login, GStudent, and GLearn. `POST /sync/{student_id}` reads GLearn subject JSON and timetable HTML, then upserts only changed normalized records. The dashboard reads MongoDB only.
+`POST /login/init` + `POST /login/complete` establish one requests session across Login, GStudent, and GLearn. Every successful login immediately reads the latest GLearn subject attendance and timetable, then upserts only changed normalized records. The dashboard reads MongoDB only.
 
 Collections are scoped by `student_id`:
 
@@ -20,7 +20,7 @@ Collections are scoped by `student_id`:
 - `planner_results`: latest calculated dashboard projection.
 - `sync_history` and `adjustment_log`: small audit records, not attendance snapshots.
 
-Portal cookies, CAPTCHA values, SSO links, and passwords are never returned or logged. Passwords are encrypted at rest so they can be reauthenticated when you manually sync; set the Fernet key before first use and retain it to decrypt existing credentials.
+Portal cookies, CAPTCHA values, SSO links, and passwords are never returned or logged. Passwords are encrypted at rest; set the Fernet key before first use and retain it to decrypt existing credentials.
 
 ## Deploy (single service: API + UI from one origin)
 
@@ -34,7 +34,7 @@ Prerequisites: a MongoDB instance — [MongoDB Atlas](https://www.mongodb.com/cl
 2. Create a new **Web Service** → **Docker** pointing at the repo's `Dockerfile` (or import `render.yaml`, after replacing the repo URL).
 3. Render builds the image, injects `$PORT`, and deploys with free HTTPS.
 
-The frontend is served from the same origin and syncs attendance on demand via the **Sync** button. No background scheduler runs; data is only refreshed when you manually trigger a sync.
+The frontend is served from the same origin and refreshes attendance automatically at every login. No background scheduler runs; attendance is always the latest from GITAM when you sign in.
 
 ### Option B — Linux VPS / Docker Compose (always-on)
 
