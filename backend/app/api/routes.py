@@ -257,6 +257,17 @@ def sync_data(student_id: str, user=Depends(verify_token)):
 @router.get("/planner/{student_id}")
 def get_planner(student_id: str, user=Depends(verify_token)):
     student_id = _student_for(student_id, user); result = _plan_or_404(student_id)
+    # Future classes are generated dynamically from the timetable + academic
+    # calendar (and are never persisted), so a snapshot built on an earlier day
+    # would report yesterday's remaining classes. Rebuild in memory when the
+    # stored snapshot was generated on a different day; keep the stored
+    # snapshot as fallback if the rebuild cannot run (e.g., no target date).
+    generated_at = result.get("generated_at")
+    if isinstance(generated_at, datetime) and generated_at.date() != datetime.now(timezone.utc).date():
+        try:
+            result = build_plan_from_database(student_id)
+        except Exception:
+            logger.warning("PLANNER: daily rebuild failed for user=%s; serving stored snapshot", student_id)
     account = get_database().users.find_one({"student_id": student_id}, {"_id": 0, "lastSyncAt": 1, "last_sync_status": 1, "customAdjustmentCount": 1, "customAdjustmentMonth": 1}) or {}
     used = account.get("customAdjustmentCount", 0) if account.get("customAdjustmentMonth") == date.today().strftime("%Y-%m") else 0
     result["sync_status"] = {"last_portal_sync_at": account.get("lastSyncAt"), **account.get("last_sync_status", {})}

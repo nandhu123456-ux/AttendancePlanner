@@ -159,8 +159,6 @@ def build_plan_from_database(student_id):
         },
         "warnings": warnings,
         "subjects": planner,
-        "today_remaining_classes": [x for x in instances if x["date"] == date.today().isoformat()],
-        "upcoming_classes": instances[:100],
         "exam_date": target_date.isoformat() if target_date else None,
         "target_type": target_type,
         "target_percentage": ctx["target_percentage"],
