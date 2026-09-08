@@ -93,14 +93,14 @@ export default function Login() {
       // The backend already refreshed the latest attendance during login
       // (data.auto_sync). Only fall back to an explicit sync if the server
       // could not run it. Either way, never log the user out over a sync
-      // problem - the dashboard offers "Sync now" as a retry.
+      // problem - attendance will refresh again on the next login.
       if (!data.auto_sync) {
         try {
           await sync(data.student_id);
         } catch {
           sessionStorage.setItem(
             "predictionUpdated",
-            "Signed in, but attendance could not be refreshed automatically. Use Sync now."
+            "Signed in, but attendance could not be refreshed automatically. It will refresh on your next login."
           );
         }
       }

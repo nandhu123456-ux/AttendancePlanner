@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Nav from "../components/Nav";
 import { Link } from "react-router-dom";
-import { getPlanner, sync } from "../api/api";
+import { getPlanner } from "../api/api";
 import "./Dashboard.css";
 
 const Metric = ({ label, value, hint, status }) => (
@@ -16,8 +16,6 @@ const Metric = ({ label, value, hint, status }) => (
 export default function Dashboard() {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
-  const [syncing, setSyncing] = useState(false);
-  const [syncMessage, setSyncMessage] = useState("");
   const [success] = useState(() => {
     const message = sessionStorage.getItem("predictionUpdated");
     sessionStorage.removeItem("predictionUpdated");
@@ -30,27 +28,6 @@ export default function Dashboard() {
     if (!id) return navigate("/login");
     getPlanner(id).then(({ data }) => setData(data)).catch((err) => setError(err.response?.data?.detail || "Unable to load your attendance plan."));
   }, [navigate]);
-
-  const runSync = async () => {
-    const id = localStorage.getItem("student_id");
-    setSyncing(true);
-    setSyncMessage("");
-    try {
-      const { data: syncData } = await sync(id);
-      setSyncMessage(
-        syncData.needs_target_date
-          ? "Attendance updated. Set a target date in Settings to recalculate your plan."
-          : "Attendance updated"
-      );
-      // Re-load the plan so Current/Remaining/Projected reflect the latest synced attendance.
-      const plan = await getPlanner(id);
-      setData(plan.data);
-    } catch (err) {
-      setSyncMessage(err.response?.data?.detail || "Sync failed. Please log in again and retry.");
-    } finally {
-      setSyncing(false);
-    }
-  };
 
   const logout = () => { localStorage.clear(); navigate("/login"); };
 
@@ -95,19 +72,11 @@ export default function Dashboard() {
           )}
         </div>
         <div className="nav-actions">
-          <button type="button" className="change-date-control sync-control" onClick={runSync} disabled={syncing} title="Fetch the latest attendance from the GITAM portal">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={syncing ? "spin" : ""}>
-              <polyline points="23 4 23 10 17 10" />
-              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-            </svg>
-            {syncing ? "Syncing attendance..." : "Sync now"}
-          </button>
           <Nav />
         </div>
       </header>
 
       {success && <p className="success-banner" role="status">{success}</p>}
-      {syncMessage && <p className="success-banner" role="status">{syncMessage}</p>}
 
       {!data.exam_date && (
         <section className="setup-note">
