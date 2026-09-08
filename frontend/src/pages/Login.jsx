@@ -231,7 +231,7 @@ export default function Login() {
               : "Sign in"}
         </button>
 
-        <small>No password is stored,Dont worry.</small>
+        <small>password is not stored,Dont worry.</small>
       </form>
     </main>
   );
