@@ -1,8 +1,10 @@
 from datetime import datetime, timezone
+import logging
 
 from app.config.database import get_database
 from .gitam_portal import PortalData
 
+logger = logging.getLogger(__name__)
 
 def _now(): return datetime.now(timezone.utc)
 
@@ -32,6 +34,11 @@ def sync_portal_data(student_id: str, data: PortalData) -> dict:
         status["timetableChanged"] = _sync_collection(db.timetable_slots, student_id, data.timetable, ("dayOfWeek", "startTime", "endTime", "subjectCode")); status["timetable"] = "success"
     elif data.timetable_error:
         status["timetableError"] = data.timetable_error
+    # Safe debug counters only - never credentials, cookies, or tokens.
+    logger.info(
+        "SYNC_DB: student=%s subjects received=%s subjects changed=%s attendance=%s timetable changed=%s",
+        student_id, len(data.subjects or []), status["subjectsChanged"], status["attendance"], status["timetableChanged"],
+    )
     db.users.update_one({"student_id": student_id}, {"$set": {"lastSyncAt": _now(), "last_sync_status": status}})
     if status["subjectsChanged"] or status["timetableChanged"]:
         db.sync_history.insert_one({"student_id": student_id, "timestamp": _now(), "subjectsChanged": status["subjectsChanged"], "timetableChanged": status["timetableChanged"]})

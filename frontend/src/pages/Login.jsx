@@ -90,7 +90,20 @@ export default function Login() {
       localStorage.setItem("student_id", data.student_id);
       // Save username for future quick login
       saveUser(username.trim());
-      await sync(data.student_id);
+      // The backend already refreshed the latest attendance during login
+      // (data.auto_sync). Only fall back to an explicit sync if the server
+      // could not run it. Either way, never log the user out over a sync
+      // problem - the dashboard offers "Sync now" as a retry.
+      if (!data.auto_sync) {
+        try {
+          await sync(data.student_id);
+        } catch {
+          sessionStorage.setItem(
+            "predictionUpdated",
+            "Signed in, but attendance could not be refreshed automatically. Use Sync now."
+          );
+        }
+      }
       navigate("/dashboard", { replace: true });
     } catch (err) {
       setError(err.response?.data?.detail || "Login failed. Please check your CAPTCHA.");
@@ -120,11 +133,19 @@ export default function Login() {
         <h1>Welcome Back</h1>
         <p className="login-copy">Sign in to track your attendance and plan ahead.</p>
 
+        <p className="login-info">
+          Enter your GITAM username and password 🔑 — the same credentials you use to open your
+          GITAM student portal. They are used only to sign in there and fetch your live attendance.
+        </p>
+
         <label>
           Student ID
           <div className="input-with-dropdown">
             <input
               required
+              id="username"
+              name="username"
+              type="text"
               autoComplete="username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
@@ -176,6 +197,8 @@ export default function Login() {
             <input
               required
               type="password"
+              id="password"
+              name="password"
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -203,6 +226,8 @@ export default function Login() {
               )}
               <input
                 required
+                type="text"
+                name="captcha"
                 autoComplete="off"
                 placeholder="Enter CAPTCHA"
                 value={captcha}
@@ -231,7 +256,7 @@ export default function Login() {
               : "Sign in"}
         </button>
 
-        <small>password is not stored,Dont worry.</small>
+        <small>Your password is encrypted and used only to sign in to the GITAM portal.</small>
       </form>
     </main>
   );

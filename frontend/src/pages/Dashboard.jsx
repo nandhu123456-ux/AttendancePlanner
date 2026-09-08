@@ -39,8 +39,8 @@ export default function Dashboard() {
       const { data: syncData } = await sync(id);
       setSyncMessage(
         syncData.needs_target_date
-          ? "Attendance synchronized. Set a target date in Settings to recalculate your plan."
-          : syncData.message || "Attendance synchronized"
+          ? "Attendance updated. Set a target date in Settings to recalculate your plan."
+          : "Attendance updated"
       );
       // Re-load the plan so Current/Remaining/Projected reflect the latest synced attendance.
       const plan = await getPlanner(id);
@@ -64,6 +64,11 @@ export default function Dashboard() {
     if (pct >= target) return "good";
     if (pct >= target - 10) return "warning";
     return "danger";
+  };
+
+  const formatDate = (iso) => {
+    const parsed = new Date(iso);
+    return Number.isNaN(parsed.getTime()) ? iso : parsed.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   };
 
   return (
@@ -95,7 +100,7 @@ export default function Dashboard() {
               <polyline points="23 4 23 10 17 10" />
               <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
             </svg>
-            {syncing ? "Syncing…" : "Sync now"}
+            {syncing ? "Syncing attendance..." : "Sync now"}
           </button>
           <Nav />
         </div>
@@ -116,32 +121,34 @@ export default function Dashboard() {
 
       <section className="metrics">
         <Metric
-          label="Current"
+          label="Current attendance"
           value={`${overall.current_percentage}%`}
-          hint={`Present ${overall.present_classes} / Total ${overall.total_classes}`}
+          hint={`${overall.present_classes} present · ${overall.absent_classes} absent · ${overall.total_classes} total`}
           status={getAttendanceStatus(overall.current_percentage, overall.target_percentage)}
         />
         <Metric label="Target" value={`${overall.target_percentage}%`} hint="Your goal" />
         <Metric
-          label="Remaining"
+          label="Classes remaining"
           value={overall.future_classes}
-          hint={data.exam_date ? <span>Through <strong className="date-highlight">{data.exam_date}</strong></span> : "Set target date"}
+          hint={data.exam_date ? <span>Until <strong className="date-highlight">{formatDate(data.exam_date)}</strong></span> : "Set target date"}
         />
         <Metric
-          label="Projected"
+          label="Projected attendance"
           value={`${overall.after_attending_all}%`}
-          hint="If you attend all"
+          hint={overall.future_classes > 0 ? `If you attend all ${overall.future_classes} classes` : "No upcoming classes"}
           status={overall.target_reachable_in_window ? "good" : "warning"}
         />
         <Metric
           label="Safe skips"
           value={overall.can_skip}
-          hint="While meeting target"
+          hint={`Can miss up to ${overall.can_skip} and stay ≥ ${overall.target_percentage}%`}
         />
         <Metric
           label="Must attend"
           value={overall.need_to_attend}
-          hint={overall.need_to_attend === 0 ? "Already at target" : "To reach target"}
+          hint={overall.need_to_attend === 0
+            ? `Already above your ${overall.target_percentage}% target`
+            : `Attend the next ${overall.need_to_attend} classes to reach ${overall.target_percentage}%`}
           status={overall.need_to_attend === 0 ? "good" : "warning"}
         />
       </section>

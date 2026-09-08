@@ -23,6 +23,7 @@ from app.services.gitam_portal import (
     init_captcha_session,
     refresh_captcha_and_fields,
 )
+from app.services.gitam_portal import _refresh_glearn_session as refresh_glearn_session
 from app.services.captcha_session_store import (
     create_captcha_session,
     get_captcha_session,
@@ -46,6 +47,7 @@ from app.services.security import (
 from app.services.session_store import (
     get_session,
     save_session,
+    remove_session,
 )
 
 from app.services.sync_service import sync_portal_data
@@ -160,7 +162,31 @@ def login_complete(data: CaptchaLoginRequest):
         upsert=True,
     )
     save_session(entry["username"], session)
-    return {"token": create_access_token(entry["username"]), "student_id": entry["username"], "needs_initial_sync": get_database().subjects.find_one({"student_id": entry["username"]}) is None}
+
+    # Every successful login must immediately refresh attendance: reuse the
+    # just-authenticated portal session to fetch the latest subject-level data
+    # and sync the database BEFORE the frontend navigates to the dashboard.
+    # Best-effort only: if the portal hiccups here, the login itself still
+    # succeeds and the frontend falls back to POST /sync/{student_id}.
+    auto_sync = None
+    try:
+        portal_data = fetch_current_data(session)
+        auto_sync = sync_portal_data(entry["username"], portal_data)
+        logger.info(
+            "AUTO-SYNC: user=%s subjects received=%s subjects changed=%s attendance=%s",
+            entry["username"], len(portal_data.subjects or []),
+            auto_sync.get("subjectsChanged", 0), auto_sync.get("attendance"),
+        )
+    except Exception:
+        # Never fail the login itself because of a sync problem.
+        logger.warning("AUTO-SYNC: deferred for user=%s; frontend will retry via /sync", entry["username"])
+
+    return {
+        "token": create_access_token(entry["username"]),
+        "student_id": entry["username"],
+        "auto_sync": auto_sync,
+        "needs_initial_sync": get_database().subjects.find_one({"student_id": entry["username"]}) is None,
+    }
 
 
 @router.post("/login/refresh-captcha")
@@ -191,13 +217,38 @@ def login(data: LoginRequest):
 
 @router.post("/sync/{student_id}")
 def sync_data(student_id: str, user=Depends(verify_token)):
-    _student_for(student_id, user); session = get_session(student_id)
-    if session is None: raise HTTPException(401, "Portal session expired. Please log in again.")
+    _student_for(student_id, user)
+    session = get_session(student_id)
+    logger.info("SYNC: user=%s session_available=%s", student_id, session is not None)
+    if session is None:
+        # Portal sessions live in memory and are lost on restart/redeploy. The
+        # GITAM login requires a manually-entered CAPTCHA, so a brand-new
+        # authenticated session can only be established by a fresh login.
+        raise HTTPException(401, "Portal session expired. Please log in again.")
     try:
-        status_data = sync_portal_data(student_id, fetch_current_data(session))
+        try:
+            portal_data = fetch_current_data(session)
+        except PortalError:
+            # The GLearn SSO may have lapsed even though the main portal
+            # session is still valid. Re-run the SSO handshake once (no
+            # CAPTCHA needed) and retry before asking the user to log in.
+            logger.info("SYNC: user=%s attendance fetch failed; refreshing GLearn SSO", student_id)
+            session = refresh_glearn_session(session)
+            save_session(student_id, session)
+            portal_data = fetch_current_data(session)
+        status_data = sync_portal_data(student_id, portal_data)
+        logger.info(
+            "SYNC: user=%s subjects received=%s subjects changed=%s attendance=%s",
+            student_id, len(portal_data.subjects or []),
+            status_data.get("subjectsChanged", 0), status_data.get("attendance"),
+        )
         result = build_plan_from_database(student_id)
     except PortalError as exc:
-        raise HTTPException(502, str(exc)) from exc
+        # The session could not be recovered; drop it so the next attempt is a
+        # clean re-login (CAPTCHA is manual, so re-auth cannot be automatic).
+        remove_session(student_id)
+        logger.warning("SYNC: user=%s portal session unrecoverable (%s); removed", student_id, type(exc).__name__)
+        raise HTTPException(401, "Portal session expired. Please log in again.") from exc
     except ValueError as exc:
         # Return sync status even if plan building fails (e.g., no target date set)
         return {"message": "Attendance synchronized but plan needs configuration", "sync": status_data, "error": str(exc), "needs_target_date": True}
