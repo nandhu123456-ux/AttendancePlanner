@@ -172,6 +172,13 @@ def login_complete(data: CaptchaLoginRequest):
             entry["username"], len(portal_data.subjects or []),
             auto_sync.get("subjectsChanged", 0), auto_sync.get("attendance"),
         )
+        # Build planner after successful sync so it's ready when frontend navigates to dashboard
+        try:
+            build_plan_from_database(entry["username"])
+            logger.info("AUTO-SYNC: planner built for user=%s", entry["username"])
+        except Exception as planner_exc:
+            # Planner build may fail if user hasn't set target date yet - that's okay
+            logger.warning("AUTO-SYNC: planner build deferred for user=%s: %s", entry["username"], str(planner_exc))
     except Exception:
         # Never fail the login itself because of a sync problem.
         logger.warning("AUTO-SYNC: deferred for user=%s; attendance will refresh on next login", entry["username"])
