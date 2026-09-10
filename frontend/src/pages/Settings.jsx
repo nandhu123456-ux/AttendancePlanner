@@ -72,7 +72,11 @@ export default function Settings() {
           {settings.calendar_info?.academic_year
             ? `Academic year: ${settings.calendar_info.academic_year} (${settings.calendar_info.semester_type || "ODD"})`
             : "No academic calendar loaded."}
-          {datePicker.max_date ? ` · Valid range: ${datePicker.min_date} to ${datePicker.max_date}` : ""}
+          {datePicker.max_date ? (
+            <span className="date-highlight">
+              {" "}· Valid range: <strong className="date-text">{datePicker.min_date}</strong> to <strong className="date-text">{datePicker.max_date}</strong>
+            </span>
+          ) : ""}
         </p>
 
         {/* Notifications toggle hidden from UI */}

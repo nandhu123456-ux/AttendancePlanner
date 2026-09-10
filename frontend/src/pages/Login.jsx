@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { loginInit, loginComplete, refreshCaptcha } from "../api/api";
 import "./Login.css";
@@ -11,10 +11,12 @@ export default function Login() {
   const [token, setToken] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [step, setStep] = useState(1);
+  const [captchaLoading, setCaptchaLoading] = useState(false);
   const [savedUsers, setSavedUsers] = useState([]);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
+  const captchaFetched = useRef(false);
 
   // Load saved usernames from localStorage on mount
   useEffect(() => {
@@ -43,25 +45,33 @@ export default function Login() {
     localStorage.setItem("saved_users", JSON.stringify(updated));
   };
 
-  const handleContinue = async (e) => {
-    e.preventDefault();
+    // Auto-fetch CAPTCHA when username and password are both filled
+  useEffect(() => {
+    if (username && password && !captchaImage && !captchaLoading && !captchaFetched.current) {
+      fetchCaptcha();
+    }
+  }, [username, password, captchaImage, captchaLoading]);
+
+  const fetchCaptcha = async () => {
+    if (!username || !password) return;
+    setCaptchaLoading(true);
     setError("");
-    setLoading(true);
     try {
       const { data } = await loginInit({ username: username.trim(), password });
       setCaptchaImage(data.captcha_image);
       setToken(data.token);
-      setStep(2);
+      captchaFetched.current = true;
     } catch (err) {
-      setError(err.response?.data?.detail || "Could not load CAPTCHA. Please try again.");
+      setError(err.response?.data?.detail || "Could not load CAPTCHA. Please check your credentials.");
     } finally {
-      setLoading(false);
+      setCaptchaLoading(false);
     }
   };
 
-  const handleRefreshCaptcha = async () => {
+    const handleRefreshCaptcha = async () => {
+    if (!token) return;
+    setCaptchaLoading(true);
     setError("");
-    setLoading(true);
     try {
       const { data } = await refreshCaptcha({ token });
       setCaptchaImage(data.captcha_image);
@@ -69,19 +79,33 @@ export default function Login() {
     } catch (err) {
       setError(err.response?.data?.detail || "Could not refresh CAPTCHA. Please try again.");
     } finally {
-      setLoading(false);
+      setCaptchaLoading(false);
     }
   };
 
-  const handleBack = () => {
-    setStep(1);
-    setCaptcha("");
+    // Reset functions for username/password changes
+  const handleUsernameChange = (e) => {
+    setUsername(e.target.value);
     setCaptchaImage(null);
+    setCaptcha("");
     setToken(null);
+    captchaFetched.current = false;
+  };
+
+  const handlePasswordChange = (e) => {
+    setPassword(e.target.value);
+    setCaptchaImage(null);
+    setCaptcha("");
+    setToken(null);
+    captchaFetched.current = false;
   };
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    if (!captcha.trim()) {
+      setError("Please enter the CAPTCHA.");
+      return;
+    }
     setError("");
     setLoading(true);
     try {
@@ -114,146 +138,128 @@ export default function Login() {
 
   return (
     <main className="login-shell">
-      <form className="login-card" onSubmit={step === 1 ? handleContinue : handleLogin}>
+      <form className="login-card" onSubmit={handleLogin}>
         <div className="brand-header">
-          <div className="brand-logo">
-            <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <div className="brand-header-inline">
+            <svg width="28" height="28" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M20 4L4 14v12l16 10 16-10V14L20 4z" stroke="currentColor" strokeWidth="2" fill="none"/>
               <path d="M20 4v32M4 14l16 10 16-10M4 26l16-10 16 10" stroke="currentColor" strokeWidth="1.5" fill="none"/>
               <circle cx="20" cy="18" r="4" fill="currentColor"/>
             </svg>
+            <h2 className="eyebrow">TRACK_75</h2>
           </div>
-          <p className="eyebrow">TRACK_75</p>
+             <div className="login-footer">
+                    <h2 className="login-copy">Made to help you stay on track ❤️</h2>
         </div>
-        <h1>Welcome Back</h1>
-        <p className="login-copy">Sign in to track your attendance and plan ahead.</p>
-
-        <p className="login-info">
-          Enter your GITAM username and password 🔑 — the same credentials you use to open your
-          GITAM student portal. They are used only to sign in there and fetch your live attendance.
-        </p>
+        </div>
 
         <label>
-          Student ID
-          <div className="input-with-dropdown">
-            <input
-              required
-              id="username"
-              name="username"
-              type="text"
-              autoComplete="username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              onFocus={() => setShowUserDropdown(true)}
-              onBlur={() => setTimeout(() => setShowUserDropdown(false), 200)}
-              disabled={step === 2}
-              placeholder="Enter your student ID"
-            />
-            {step === 1 && savedUsers.length > 0 && showUserDropdown && (
-              <div className="saved-users-dropdown">
-                <div className="saved-users-header">Recent accounts</div>
-                {savedUsers.map((user) => (
-                  <div
-                    key={user}
-                    className="saved-user-item"
-                    onMouseDown={() => {
-                      setUsername(user);
-                      setShowUserDropdown(false);
-                    }}
-                  >
-                    <span className="user-icon">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                        <circle cx="12" cy="7" r="4"/>
-                      </svg>
-                    </span>
-                    <span className="user-name">{user}</span>
-                    <button
-                      type="button"
-                      className="remove-user-btn"
-                      onMouseDown={(e) => {
-                        e.stopPropagation();
-                        removeUser(user);
-                      }}
-                      title="Remove from list"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+           
+          <input
+            required
+            type="text"
+            id="username"
+            name="username"
+            autoComplete="username"
+            value={username}
+            onChange={handleUsernameChange}
+            placeholder="Gitam ID"
+          />
         </label>
 
-        {step === 1 && (
-          <label>
-            Password
+        <label>
+          
+          <div className="password-input-wrapper">
             <input
               required
-              type="password"
+              type={showPassword ? "text" : "password"}
               id="password"
               name="password"
               autoComplete="current-password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={handlePasswordChange}
+              placeholder="Gitam Password"
             />
-          </label>
+            <button
+              type="button"
+              className="password-toggle"
+              onClick={() => setShowPassword(!showPassword)}
+              tabIndex="-1"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+            >
+              {showPassword ? (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                  <line x1="1" y1="1" x2="23" y2="23"/>
+                </svg>
+              ) : (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+              )}
+            </button>
+          </div>
+        </label>
+
+        {(captchaImage || captchaLoading) && (
+          <div className="captcha-section">
+            <label className="captcha-label">CAPTCHA</label>
+            {captchaImage ? (
+              <div className="captcha-image-container">
+                <img src={captchaImage} alt="CAPTCHA" className="captcha-image" />
+                <button
+                  type="button"
+                  className="captcha-refresh"
+                  onClick={handleRefreshCaptcha}
+                  disabled={captchaLoading}
+                  title="Refresh CAPTCHA"
+                >
+                  ↻
+                </button>
+              </div>
+            ) : (
+              <div className="captcha-loading">
+                <div className="spinner"></div>
+                Loading CAPTCHA...
+              </div>
+            )}
+            <input
+              required
+              type="text"
+              name="captcha"
+              autoComplete="off"
+              placeholder="Enter CAPTCHA"
+              value={captcha}
+              onChange={(e) => setCaptcha(e.target.value)}
+              className="captcha-input"
+              maxLength={32}
+            />
+          </div>
         )}
 
-        {step === 2 && (
-          <>
-            <button type="button" className="text-button" onClick={handleBack}>
-              ← Back to credentials
-            </button>
-
-            <div className="captcha-section">
-              <p className="captcha-label">Enter the characters shown below:</p>
-              {captchaImage ? (
-                <div className="captcha-image-container">
-                  <img src={captchaImage} alt="CAPTCHA" className="captcha-image" />
-                  <button type="button" className="captcha-refresh" onClick={handleRefreshCaptcha} title="Refresh CAPTCHA">
-                    ↻
-                  </button>
-                </div>
-              ) : (
-                <div className="captcha-loading">Loading CAPTCHA...</div>
-              )}
-              <input
-                required
-                type="text"
-                name="captcha"
-                autoComplete="off"
-                placeholder="Enter CAPTCHA"
-                value={captcha}
-                onChange={(e) => setCaptcha(e.target.value)}
-                className="captcha-input"
-                maxLength={32}
-              />
-            </div>
-
-            <label className="password-display">
-              Password:
-              <span className="password-mask">{"•".repeat(Math.min(password.length, 12))}</span>
-            </label>
-          </>
+        {!captchaImage && !captchaLoading && username && password && (
+          <button
+            type="button"
+            className="captcha-load-btn"
+            onClick={fetchCaptcha}
+          >
+            Load CAPTCHA
+          </button>
         )}
 
         {error && <p className="form-error" role="alert">{error}</p>}
 
-        <button type="submit" disabled={loading}>
-          {loading
-            ? step === 1
-              ? "Loading CAPTCHA..."
-              : "Signing in..."
-            : step === 1
-              ? "Continue"
-              : "Sign in"}
+        <button type="submit" disabled={loading || !captchaImage || !captcha}>
+          {loading ? "Signing in..." : "Sign in"}
         </button>
-
-        <small>Your password is encrypted and used only to sign in to the GITAM portal.</small>
+         
+        <div className="trust-divider">
+          <span className="trust-line">Your trust, our responsibility. 🤝</span>
+        </div>
       </form>
     </main>
-  );
+    );
 }
+
 
