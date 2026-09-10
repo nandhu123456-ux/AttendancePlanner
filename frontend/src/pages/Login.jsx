@@ -18,6 +18,8 @@ export default function Login() {
   const navigate = useNavigate();
   const captchaFetched = useRef(false);
   const debounceTimer = useRef(null);
+  // Store the actual credentials used to fetch CAPTCHA
+  const credsRef = useRef({ username: "", password: "" });
 
   // Load saved usernames from localStorage on mount
   useEffect(() => {
@@ -55,6 +57,8 @@ export default function Login() {
       setCaptchaImage(data.captcha_image);
       setToken(data.token);
       captchaFetched.current = true;
+      // Save the credentials that were used to fetch this CAPTCHA
+      credsRef.current = { username: username.trim(), password };
     } catch (err) {
       setError(err.response?.data?.detail || "Could not load CAPTCHA. Please check your credentials.");
     } finally {
@@ -94,10 +98,11 @@ export default function Login() {
     }
   };
 
-    // Handle username change - don't reset CAPTCHA immediately
+    // Handle username change - reset CAPTCHA if it was already loaded
   const handleUsernameChange = (e) => {
     setUsername(e.target.value);
-    if (!e.target.value.trim()) {
+    // Reset CAPTCHA if user changes credentials after CAPTCHA loaded
+    if (captchaFetched.current) {
       setCaptchaImage(null);
       setCaptcha("");
       setToken(null);
@@ -105,10 +110,11 @@ export default function Login() {
     }
   };
 
-  // Handle password change - don't reset CAPTCHA immediately
+  // Handle password change - reset CAPTCHA if it was already loaded
   const handlePasswordChange = (e) => {
     setPassword(e.target.value);
-    if (!e.target.value) {
+    // Reset CAPTCHA if user changes credentials after CAPTCHA loaded
+    if (captchaFetched.current) {
       setCaptchaImage(null);
       setCaptcha("");
       setToken(null);
@@ -129,7 +135,7 @@ export default function Login() {
       localStorage.setItem("token", data.token);
       localStorage.setItem("student_id", data.student_id);
       // Save username for future quick login
-      saveUser(username.trim());
+      saveUser(credsRef.current.username);
       // The backend already refreshed the latest attendance during login.
       // If it could not, the user can log in again to refresh - attendance
       // is always re-fetched from GITAM at every successful login.
