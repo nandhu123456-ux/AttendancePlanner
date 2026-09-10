@@ -87,10 +87,21 @@ def build_plan_from_database(student_id):
         custom_date = datetime.strptime(custom_date, "%Y-%m-%d").date()
 
     if not custom_date:
-        raise ValueError("No target date set. Please select a target date in Settings.")
+        # Fallback: use classwork end date from academic calendar
+        classwork_range = events.get("classwork_range")
+        if classwork_range and classwork_range[1]:
+            custom_date = classwork_range[1]
+            if isinstance(custom_date, str):
+                custom_date = datetime.strptime(custom_date, "%Y-%m-%d").date()
+            target_type = "auto"
+        else:
+            # No calendar found for this batch - use default Nov 6
+            custom_date = date(now_date().year, 11, 6)
+            target_type = "auto"
+    else:
+        target_type = "custom"
 
     target_date = custom_date
-    target_type = "custom"
 
     # Load data
     subjects = list(db.subjects.find({"student_id": student_id}, {"_id": 0, "student_id": 0}))

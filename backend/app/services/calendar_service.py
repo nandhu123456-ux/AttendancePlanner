@@ -356,6 +356,7 @@ def get_date_picker_range(events: dict, current_date: date | None = None) -> dic
 
     Min: today
     Max: classwork end date (last working day) from the calendar
+    Fallback: November 6 of current year if no calendar found
     """
     if current_date is None:
         current_date = now_date()
@@ -367,6 +368,10 @@ def get_date_picker_range(events: dict, current_date: date | None = None) -> dic
     # Convert string to date if needed
     if isinstance(max_date, str):
         max_date = datetime.strptime(max_date, "%Y-%m-%d").date()
+
+    # Fallback: if no calendar/classwork found, use November 6
+    if max_date is None:
+        max_date = date(now_date().year, 11, 6)
 
     return {
         "min_date": current_date.isoformat(),
