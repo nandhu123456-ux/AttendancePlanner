@@ -51,32 +51,195 @@
 .password-input-wrapper input {
   padding-right: 44px;
 }
+
 .password-toggle {
   position: absolute;
   right: 8px;
   top: 50%;
   transform: translateY(-50%);
+
+  /* No background / box */
   background: transparent;
   border: none;
+  outline: none;
+  box-shadow: none;
+
   cursor: pointer;
   color: var(--text-secondary);
   padding: 4px;
+
   display: flex;
   align-items: center;
   justify-content: center;
+
   transition: color 0.2s ease;
 }
+
 .password-toggle:hover {
   color: var(--primary);
   background: transparent;
+  border: none;
+  outline: none;
+  box-shadow: none;
 }
+
+.password-toggle:focus,
+.password-toggle:active {
+  background: transparent;
+  border: none;
+  outline: none;
+  box-shadow: none;
+}
+
 .password-toggle svg {
   display: block;
-}.password-display{font-size:.82rem;color:var(--text-secondary)}.password-mask{color:var(--text-muted);font-family:monospace;letter-spacing:2px;margin-left:8px}.input-with-dropdown{position:relative}.saved-users-dropdown{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--bg-surface);border:1px solid var(--border-medium);border-radius:var(--radius-sm);overflow:hidden;z-index:100;box-shadow:var(--shadow-lg);animation:slideDown .15s ease-out}@keyframes slideDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}.saved-users-header{padding:10px 14px;font-size:.72rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.1em;background:var(--bg-card);border-bottom:1px solid var(--border-light)}.saved-user-item{display:flex;align-items:center;gap:var(--spacing-sm);padding:12px 14px;cursor:pointer;transition:background .15s ease}.saved-user-item:hover{background:var(--primary-light)}.user-icon{display:flex;align-items:center;justify-content:center;width:32px;height:32px;background:var(--primary-light);border-radius:var(--radius-sm);color:var(--text-teal)}.user-name{flex:1;color:var(--text-primary);font-size:.9rem;font-weight:500}.remove-user-btn{display:flex;align-items:center;justify-content:center;width:24px;height:24px;background:none;border:none;color:var(--text-muted);font-size:1.1rem;cursor:pointer;border-radius:4px;transition:all .15s ease}.remove-user-btn:hover{background:var(--error-50);color:var(--error-500)}@media(max-width:480px){.login-shell{padding:var(--spacing-sm);padding-top:40px}.login-card{padding:var(--spacing-md);gap:var(--spacing-sm)}.login-card h1{font-size:1.35rem}}
-.login-info{margin:0;padding:10px 12px;font-size:.78rem;line-height:1.55;color:var(--text-secondary);background:var(--bg-input);border:1px solid var(--border-light);border-left:3px solid var(--primary);border-radius:var(--radius-sm)}
+  width: 20px;
+  height: 20px;
+}
+
+/* Password display */
+.password-display {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.password-mask {
+  color: var(--text-muted);
+  font-family: monospace;
+  letter-spacing: 2px;
+  margin-left: 8px;
+}
+
+/* Saved users */
+.input-with-dropdown {
+  position: relative;
+}
+
+.saved-users-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  z-index: 100;
+  box-shadow: var(--shadow-lg);
+  animation: slideDown 0.15s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.saved-users-header {
+  padding: 10px 14px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.saved-user-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.saved-user-item:hover {
+  background: var(--primary-light);
+}
+
+.user-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: var(--primary-light);
+  border-radius: var(--radius-sm);
+  color: var(--text-teal);
+}
+
+.user-name {
+  flex: 1;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.remove-user-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 24px;
+  height: 24px;
+
+  background: none;
+  border: none;
+  outline: none;
+  box-shadow: none;
+
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  cursor: pointer;
+
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.remove-user-btn:hover {
+  background: var(--error-50);
+  color: var(--error-500);
+}
+
+.login-info {
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  background: var(--bg-input);
+  border: 1px solid var(--border-light);
+  border-left: 3px solid var(--primary);
+  border-radius: var(--radius-sm);
+}
+
 .trust-line {
   display: inline-block;
   margin-top: 7px;
+}
+
+@media (max-width: 480px) {
+  .login-shell {
+    padding: var(--spacing-sm);
+    padding-top: 40px;
+  }
+
+  .login-card {
+    padding: var(--spacing-md);
+    gap: var(--spacing-sm);
+  }
+
+  .login-card h1 {
+    font-size: 1.35rem;
+  }
 }
 .trust-divider {
   display: flex;
@@ -92,4 +255,91 @@
   height: 1px;
   background: var(--border-light);
   max-width: 80px;
+}
+
+/* =========================================================
+   PASSWORD EYE BUTTON — FINAL OVERRIDE
+   Put this at the VERY END of Login.css
+   ========================================================= */
+
+.password-input-wrapper {
+  position: relative !important;
+}
+
+.password-input-wrapper .password-toggle {
+  /* POSITION */
+  position: absolute !important;
+  top: 50% !important;
+  right: 10px !important;
+  transform: translateY(-50%) !important;
+
+  /* SIZE */
+  width: 32px !important;
+  height: 32px !important;
+  min-width: 32px !important;
+  min-height: 32px !important;
+
+  /* REMOVE ALL BUTTON STYLING */
+  padding: 0 !important;
+  margin: 0 !important;
+
+  background: transparent !important;
+  background-color: transparent !important;
+
+  border: 0 !important;
+  border-width: 0 !important;
+  border-style: none !important;
+  border-color: transparent !important;
+
+  box-shadow: none !important;
+  outline: none !important;
+
+  /* ICON */
+  color: var(--text-secondary) !important;
+
+  /* LAYOUT */
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  cursor: pointer !important;
+
+  /* IMPORTANT */
+  appearance: none !important;
+  -webkit-appearance: none !important;
+}
+
+.password-input-wrapper .password-toggle:hover,
+.password-input-wrapper .password-toggle:focus,
+.password-input-wrapper .password-toggle:focus-visible,
+.password-input-wrapper .password-toggle:active {
+  background: transparent !important;
+  background-color: transparent !important;
+
+  border: 0 !important;
+  box-shadow: none !important;
+  outline: none !important;
+
+  color: var(--primary) !important;
+}
+
+.password-input-wrapper .password-toggle svg {
+  display: block !important;
+
+  width: 24px !important;
+  height: 24px !important;
+
+  margin: 0 !important;
+  padding: 0 !important;
+
+  background: transparent !important;
+  fill: none !important;
+}
+
+/* Prevent generic button rules from creating a box */
+.password-input-wrapper button.password-toggle {
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
 }

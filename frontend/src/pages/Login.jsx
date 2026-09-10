@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { loginInit, loginComplete, refreshCaptcha } from "../api/api";
 import "./Login.css";
@@ -17,6 +17,7 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
   const captchaFetched = useRef(false);
+  const debounceTimer = useRef(null);
 
   // Load saved usernames from localStorage on mount
   useEffect(() => {
@@ -45,15 +46,8 @@ export default function Login() {
     localStorage.setItem("saved_users", JSON.stringify(updated));
   };
 
-    // Auto-fetch CAPTCHA when username and password are both filled
-  useEffect(() => {
-    if (username && password && !captchaImage && !captchaLoading && !captchaFetched.current) {
-      fetchCaptcha();
-    }
-  }, [username, password, captchaImage, captchaLoading]);
-
-  const fetchCaptcha = async () => {
-    if (!username || !password) return;
+    const fetchCaptcha = useCallback(async () => {
+    if (!username.trim() || !password) return;
     setCaptchaLoading(true);
     setError("");
     try {
@@ -66,7 +60,24 @@ export default function Login() {
     } finally {
       setCaptchaLoading(false);
     }
-  };
+  }, [username, password]);
+
+  // Debounced auto-fetch CAPTCHA - only after user stops typing
+  useEffect(() => {
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
+    }
+    if (username.trim() && password && !captchaImage && !captchaLoading && !captchaFetched.current) {
+      debounceTimer.current = setTimeout(() => {
+        fetchCaptcha();
+      }, 800);
+    }
+    return () => {
+      if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
+      }
+    };
+  }, [username, password, captchaImage, captchaLoading, fetchCaptcha]);
 
     const handleRefreshCaptcha = async () => {
     if (!token) return;
@@ -83,21 +94,26 @@ export default function Login() {
     }
   };
 
-    // Reset functions for username/password changes
+    // Handle username change - don't reset CAPTCHA immediately
   const handleUsernameChange = (e) => {
     setUsername(e.target.value);
-    setCaptchaImage(null);
-    setCaptcha("");
-    setToken(null);
-    captchaFetched.current = false;
+    if (!e.target.value.trim()) {
+      setCaptchaImage(null);
+      setCaptcha("");
+      setToken(null);
+      captchaFetched.current = false;
+    }
   };
 
+  // Handle password change - don't reset CAPTCHA immediately
   const handlePasswordChange = (e) => {
     setPassword(e.target.value);
-    setCaptchaImage(null);
-    setCaptcha("");
-    setToken(null);
-    captchaFetched.current = false;
+    if (!e.target.value) {
+      setCaptchaImage(null);
+      setCaptcha("");
+      setToken(null);
+      captchaFetched.current = false;
+    }
   };
 
   const handleLogin = async (e) => {
@@ -250,7 +266,7 @@ export default function Login() {
 
         {error && <p className="form-error" role="alert">{error}</p>}
 
-        <button type="submit" disabled={loading || !captchaImage || !captcha}>
+        <button type="submit" disabled={loading || !captchaImage || !captcha.trim()}>
           {loading ? "Signing in..." : "Sign in"}
         </button>
          
