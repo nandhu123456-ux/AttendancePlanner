@@ -11,6 +11,7 @@ from .calendar_service import (
     get_applicable_calendar_events,
     get_batch_from_student_id,
     get_date_picker_range,
+    get_default_exam_end_date,
     get_student_year_from_batch,
     now_date,
     DEFAULT_CAMPUS,
@@ -60,7 +61,7 @@ def get_preferences(student_id):
 
     return {
         "target_percentage": ctx["target_percentage"],
-        "exam_date": exam_date or (date.today() + timedelta(days=30)),
+        "exam_date": exam_date or get_default_exam_end_date(student_batch=ctx["batch"], student_year=ctx["year"], campus=ctx["campus"]),
         "notifications_enabled": ctx["notifications_enabled"],
         "target_type": ctx.get("target_type", "custom"),
         "custom_target_date": ctx.get("custom_target_date"),

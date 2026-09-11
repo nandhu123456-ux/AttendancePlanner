@@ -52,6 +52,7 @@ from app.services.calendar_service import (
     get_applicable_calendar_events,
     get_batch_from_student_id,
     get_date_picker_range,
+    get_default_exam_end_date,
     get_student_year_from_batch,
     now_date,
     DEFAULT_CAMPUS,
@@ -149,11 +150,15 @@ def login_complete(data: CaptchaLoginRequest):
     remove_captcha_session(data.token)
     logger.info("COMPLETE: Login successful for user=%s", entry["username"])
 
+    # Determine default exam end date from academic calendar for new users
+    student_batch = get_batch_from_student_id(entry["username"])
+    default_exam_date = get_default_exam_end_date(student_batch=student_batch)
+
     now = datetime.now(timezone.utc)
     get_database().users.update_one(
         {"student_id": entry["username"]},
         {"$set": {"username": entry["username"], "encryptedPassword": encrypt_password(entry["password"]), "encryptionVersion": ENCRYPTION_VERSION, "lastLoginAt": now},
-         "$setOnInsert": {"target_percentage": 75, "notifications_enabled": False, "custom_target_date": (date.today() + timedelta(days=30)).isoformat()}},
+         "$setOnInsert": {"target_percentage": 75, "notifications_enabled": False, "custom_target_date": default_exam_date.isoformat()}},
         upsert=True,
     )
     save_session(entry["username"], session)

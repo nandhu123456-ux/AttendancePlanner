@@ -269,15 +269,21 @@ def validate_planner_date(custom_date: date, events: dict, current_date: date | 
 
     Rules:
     - Cannot be before today
-    - Cannot be after classwork end date (last working day)
+    - Cannot be after the semester end (sessional_2 end, or classwork end, or Nov 6)
     - Returns validation result with message
     """
     if current_date is None:
         current_date = now_date()
 
-    # Use classwork end date as max (last working day)
-    classwork_range = events.get("classwork_range")
-    max_date = classwork_range[1] if classwork_range else None
+    # Use sessional_2 end date as max (last exam date), fallback to classwork end
+    max_date = None
+    s2_range = events.get("sessional_2_range")
+    if s2_range and s2_range[1]:
+        max_date = s2_range[1]
+    if max_date is None:
+        classwork_range = events.get("classwork_range")
+        if classwork_range and classwork_range[1]:
+            max_date = classwork_range[1]
 
     # Convert string to date if needed
     if isinstance(max_date, str):
@@ -351,25 +357,72 @@ def resolve_target_date(events: dict, target_type: str = "auto", custom_date: da
     }
 
 
+def get_default_exam_end_date(student_batch: int | None = None, student_year: int | None = None, campus: str = DEFAULT_CAMPUS) -> date:
+    """Get the default exam end date from the academic calendar.
+
+    Priority:
+    1. End of sessional_2 (last exam date)
+    2. Classwork end date (last working day)
+    3. November 6 of the current year (fallback)
+
+    Args:
+        student_batch: Admission batch year
+        student_year: Current study year
+        campus: Campus code (default BLR)
+
+    Returns:
+        The exam end date, or November 6 of current year as fallback.
+    """
+    calendar = get_applicable_academic_calendar(student_year=student_year, student_batch=student_batch)
+    if not calendar:
+        return date(now_date().year, 11, 6)
+
+    events = get_applicable_calendar_events(calendar, campus)
+
+    # Priority 1: End of sessional_2 (last exam)
+    s2_range = events.get("sessional_2_range")
+    if s2_range and s2_range[1]:
+        end_date = s2_range[1]
+        if isinstance(end_date, str):
+            end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
+        return end_date
+
+    # Priority 2: Classwork end date (last working day)
+    classwork_range = events.get("classwork_range")
+    if classwork_range and classwork_range[1]:
+        end_date = classwork_range[1]
+        if isinstance(end_date, str):
+            end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
+        return end_date
+
+    # Priority 3: November 6 fallback
+    return date(now_date().year, 11, 6)
+
+
 def get_date_picker_range(events: dict, current_date: date | None = None) -> dict:
     """Get the min/max dates for the frontend date picker.
 
     Min: today
-    Max: classwork end date (last working day) from the calendar
-    Fallback: November 6 of current year if no calendar found
+    Max: sessional_2 end date (last exam), or classwork end date, or November 6 fallback
     """
     if current_date is None:
         current_date = now_date()
 
-    # Use classwork end date as max (last working day)
-    classwork_range = events.get("classwork_range")
-    max_date = classwork_range[1] if classwork_range else None
+    # Use sessional_2 end date as max (last exam date), fallback to classwork end
+    max_date = None
+    s2_range = events.get("sessional_2_range")
+    if s2_range and s2_range[1]:
+        max_date = s2_range[1]
+    if max_date is None:
+        classwork_range = events.get("classwork_range")
+        if classwork_range and classwork_range[1]:
+            max_date = classwork_range[1]
 
     # Convert string to date if needed
     if isinstance(max_date, str):
         max_date = datetime.strptime(max_date, "%Y-%m-%d").date()
 
-    # Fallback: if no calendar/classwork found, use November 6
+    # Fallback: if no calendar data found, use November 6
     if max_date is None:
         max_date = date(now_date().year, 11, 6)
 
