@@ -67,72 +67,6 @@ def get_preferences(student_id):
     }
 
 
-def calculate_remaining_classes(slots, subjects, target_date, events, semester_start=None):
-    """Calculate accurate remaining classes by cross-referencing timetable with attendance.
-
-    This ensures that if a class was conducted (present or absent incremented),
-    it's properly accounted for even if the timetable doesn't perfectly match.
-
-    Args:
-        slots: Timetable slots from database
-        subjects: Subject attendance data from database
-        target_date: Target exam date
-        events: Calendar events dict
-        semester_start: Start of semester (defaults to classwork start or 30 days ago)
-
-    Returns:
-        Tuple of (remaining_per_subject dict, total_remaining int)
-    """
-    # Determine semester start date
-    if semester_start is None:
-        classwork_range = events.get("classwork_range")
-        if classwork_range and classwork_range[0]:
-            semester_start = classwork_range[0]
-            if isinstance(semester_start, str):
-                semester_start = datetime.strptime(semester_start, "%Y-%m-%d").date()
-        else:
-            # Default: 30 days ago as rough semester start
-            semester_start = now_date() - timedelta(days=30)
-
-    # Generate ALL scheduled classes from semester start to exam date
-    all_scheduled = future_class_instances(
-        slots,
-        datetime.combine(semester_start, datetime.min.time()),
-        target_date,
-        blocked_dates=events["all_blocked"],
-        timetable_overrides=events.get("timetable_overrides"),
-    )
-
-    # Count total scheduled classes per subject
-    scheduled_per_subject = {}
-    for item in all_scheduled:
-        code = item["subjectCode"]
-        scheduled_per_subject[code] = scheduled_per_subject.get(code, 0) + 1
-
-    # Get conducted classes per subject from attendance
-    conducted_per_subject = {}
-    for subject in subjects:
-        code = subject["subjectCode"]
-        conducted_per_subject[code] = subject["totalClasses"]
-
-    # Calculate remaining per subject: max(0, scheduled - conducted)
-    remaining_per_subject = {}
-    for code in scheduled_per_subject:
-        scheduled = scheduled_per_subject.get(code, 0)
-        conducted = conducted_per_subject.get(code, 0)
-        remaining = max(0, scheduled - conducted)
-        remaining_per_subject[code] = remaining
-
-    # Also account for subjects in attendance but not in timetable
-    for code in conducted_per_subject:
-        if code not in remaining_per_subject:
-            remaining_per_subject[code] = 0
-
-    total_remaining = sum(remaining_per_subject.values())
-
-    return remaining_per_subject, total_remaining
-
-
 def build_plan_from_database(student_id):
     """Build a calendar-aware attendance plan for the student."""
     ctx = get_student_context(student_id)
@@ -173,10 +107,19 @@ def build_plan_from_database(student_id):
     subjects = list(db.subjects.find({"student_id": student_id}, {"_id": 0, "student_id": 0}))
     slots = list(db.timetable_slots.find({"student_id": student_id}, {"_id": 0, "student_id": 0}))
 
-    # Calculate accurate remaining classes by cross-referencing timetable with attendance
-    remaining_per_subject, future_total = calculate_remaining_classes(
-        slots, subjects, target_date, events
+    # Generate calendar-aware future instances from TODAY to exam date
+    instances = future_class_instances(
+        slots,
+        datetime.now(),
+        target_date,
+        blocked_dates=events["all_blocked"],
+        timetable_overrides=events.get("timetable_overrides"),
     )
+
+    # Count future classes per subject
+    future = {}
+    for item in instances:
+        future[item["subjectCode"]] = future.get(item["subjectCode"], 0) + 1
 
     # Build per-subject planner
     planner, warnings = {}, []
@@ -189,7 +132,7 @@ def build_plan_from_database(student_id):
             "present": subject["presentClasses"],
             "absent": subject["absentClasses"],
             "current_percentage": metric["percentage"],
-            "future_classes": remaining_per_subject.get(code, 0),
+            "future_classes": future.get(code, 0),
             "safe_skips": metric["safe_bunks"],
             "required_attendance": metric["classes_required_to_target"],
         }
@@ -204,6 +147,7 @@ def build_plan_from_database(student_id):
     total = sum(x["totalClasses"] for x in subjects)
     present = sum(x["presentClasses"] for x in subjects)
     metric = attendance_metrics(total, present, ctx["target_percentage"])
+    future_total = len(instances)
     after = round(100 * (present + future_total) / (total + future_total), 2) if total + future_total else 0
 
     # Compile blocked dates info for transparency
