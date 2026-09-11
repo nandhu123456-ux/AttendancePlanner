@@ -80,8 +80,8 @@ export default function Dashboard() {
 
       <div className="notice-marquee">
         <div className="notice-marquee-content">
-<span>📅 Change your prediction date anytime in Settings to recalculate future classes.</span>
-<span>🔄 Attendance and predictions refresh on every login for accurate, up-to-date results.</span>
+<span>🎓 Future classes follow the official GITAM academic calendar.</span>
+<span>📅 Change your prediction date anytime in Settings</span>
         </div>
       </div>
 
