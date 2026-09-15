@@ -252,3 +252,12 @@ html, body {
   color: var(--text-primary);
 }
 
+/* Small inline instruction shown when the browser has not (yet) provided a
+   deferred native install prompt — no fake install flow is ever created. */
+.pwa-install-hint {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+

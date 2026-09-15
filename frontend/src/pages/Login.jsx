@@ -171,7 +171,6 @@ export default function Login() {
             <h2 className="eyebrow">TRACK_75</h2>
           </div>
              <div className="login-footer">
-                    <h2 className="login-copy">Made to help you stay on track ❤️</h2>
         </div>
         </div>
 
@@ -280,7 +279,7 @@ export default function Login() {
         </button>
          
         <div className="trust-divider">
-          <span className="trust-line">Your trust, our responsibility. 🤝</span>
+          <span className="trust-line">Share this with your classmates!</span>
         </div>
       </form>
     </main>
