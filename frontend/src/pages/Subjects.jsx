@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Nav from "../components/Nav";
+import PageHeader from "../components/PageHeader";
 import { getPlanner } from "../api/api";
 import "./Dashboard.css";
 
@@ -8,20 +9,8 @@ export default function Subjects() {
   useEffect(() => { getPlanner(localStorage.getItem("student_id")).then(({ data }) => setSubjects(data.subjects)); }, []);
   return (
     <main className="dashboard">
-      <header>
-        <div>
-          <div className="brand-header-inline">
-            <svg width="24" height="24" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M20 4L4 14v12l16 10 16-10V14L20 4z" stroke="currentColor" strokeWidth="2" fill="none"/>
-              <path d="M20 4v32M4 14l16 10 16-10M4 26l16-10 16 10" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-              <circle cx="20" cy="18" r="4" fill="currentColor"/>
-            </svg>
-            <p className="eyebrow">TRACK_75</p>
-          </div>
-          <h1>Subjects</h1>
-        </div>
-        <Nav />
-      </header>
+      <PageHeader title="Subjects" />
+      <Nav />
       {!subjects ? (
         <div className="spinner" />
       ) : (

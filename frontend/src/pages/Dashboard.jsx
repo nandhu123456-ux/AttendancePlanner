@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import Nav from "../components/Nav";
-import { Link } from "react-router-dom";
+import StudentProfile from "../components/StudentProfile";
+import PageHeader from "../components/PageHeader";
 import { getPlanner } from "../api/api";
 import "./Dashboard.css";
 
-const Metric = ({ label, value, hint, status }) => (
-  <article className={`metric ${status ? `metric-${status}` : ""}`}>
+const Metric = ({ label, value, hint, status, hero = false }) => (
+  <article className={`metric${hero ? " metric-hero" : ""}${status ? ` metric-${status}` : ""}`}>
     <p>{label}</p>
     <strong>{value}</strong>
     {hint && <span>{hint}</span>}
@@ -16,6 +17,7 @@ const Metric = ({ label, value, hint, status }) => (
 export default function Dashboard() {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
+  const studentId = localStorage.getItem("student_id");
   const [success] = useState(() => {
     const message = sessionStorage.getItem("predictionUpdated");
     sessionStorage.removeItem("predictionUpdated");
@@ -37,11 +39,11 @@ export default function Dashboard() {
   const { overall, warnings } = data;
   const calInfo = data.calendar_info || {};
 
-  const getAttendanceStatus = (pct, target) => {
-    if (pct >= target) return "good";
-    if (pct >= target - 10) return "warning";
-    return "danger";
-  };
+  // Status label derived only from existing attendance/target values.
+  const status = overall.current_percentage >= overall.target_percentage
+    ? "good"
+    : overall.current_percentage >= overall.target_percentage - 10 ? "warning" : "danger";
+  const statusLabel = { good: "On track", warning: "Needs attention", danger: "At risk" }[status];
 
   const formatDate = (iso) => {
     const parsed = new Date(iso);
@@ -50,40 +52,21 @@ export default function Dashboard() {
 
   return (
     <main className="dashboard">
-      <header className="dashboard-header">
-        <div>
-          <div className="brand-header-inline">
-            <svg width="28" height="28" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M20 4L4 14v12l16 10 16-10V14L20 4z" stroke="currentColor" strokeWidth="2" fill="none"/>
-              <path d="M20 4v32M4 14l16 10 16-10M4 26l16-10 16 10" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-              <circle cx="20" cy="18" r="4" fill="currentColor"/>
-            </svg>
-            <p className="eyebrow">TRACK_75</p>
-          </div>
-          <h1>Dashboard</h1>
-          {calInfo.sessional && (
-            <p className="sessional-badge">
-              {calInfo.academic_year && (
-                <span className="academic-year-badge">{calInfo.academic_year} ({calInfo.semester_type || "ODD"})</span>
-              )}
-              <span>Targeting {calInfo.sessional.replace("_", "-").toUpperCase()}</span>
-              {calInfo.sessional_end ? ` · ends ${calInfo.sessional_end}` : ""}
-            </p>
-          )}
-        </div>
-        <div className="nav-actions">
-          <Nav />
-        </div>
-      </header>
+      <PageHeader title="Dashboard" actions={<StudentProfile studentId={studentId} />}>
+        {calInfo.sessional && (
+          <p className="sessional-badge">
+            {calInfo.academic_year && (
+              <span className="academic-year-badge">{calInfo.academic_year} ({calInfo.semester_type || "ODD"})</span>
+            )}
+            <span>Targeting {calInfo.sessional.replace("_", "-").toUpperCase()}</span>
+            {calInfo.sessional_end ? ` · ends ${calInfo.sessional_end}` : ""}
+          </p>
+        )}
+      </PageHeader>
+
+      <Nav />
 
       {success && <p className="success-banner" role="status">{success}</p>}
-
-      <div className="notice-marquee">
-        <div className="notice-marquee-content">
-<span>🎓 Future classes follow the official GITAM academic calendar.</span>
-<span>📅 Change your prediction date anytime in Settings</span>
-        </div>
-      </div>
 
       {!data.exam_date && (
         <section className="setup-note">
@@ -95,56 +78,80 @@ export default function Dashboard() {
         </section>
       )}
 
-      <section className="metrics">
-        <Metric
-          label="Current attendance"
-          value={`${overall.current_percentage}%`}
-          hint={`${overall.present_classes} present · ${overall.absent_classes} absent · ${overall.total_classes} total`}
-          status={getAttendanceStatus(overall.current_percentage, overall.target_percentage)}
-        />
-        <Metric label="Target" value={`${overall.target_percentage}%`} hint="Your goal" />
-        <Metric
-          label="Classes remaining"
-          value={overall.future_classes}
-          hint={data.exam_date ? <span>Until <strong className="date-highlight">{formatDate(data.exam_date)}</strong></span> : "Set target date"}
-        />
-        <Metric
-          label="Projected attendance"
-          value={`${overall.after_attending_all}%`}
-          hint={overall.future_classes > 0 ? `If you attend all ${overall.future_classes} classes` : "No upcoming classes"}
-          status={overall.target_reachable_in_window ? "good" : "warning"}
-        />
-        <Metric
-          label="Safe skips"
-          value={overall.can_skip}
-          hint={`Can miss up to ${overall.can_skip} and stay ≥ ${overall.target_percentage}%`}
-        />
-        <Metric
-          label="Must attend"
-          value={overall.need_to_attend}
-          hint={overall.need_to_attend === 0
-            ? `Already above your ${overall.target_percentage}% target`
-            : `Attend the next ${overall.need_to_attend} classes to reach ${overall.target_percentage}%`}
-          status={overall.need_to_attend === 0 ? "good" : "warning"}
-        />
+      <section className="dash-section" aria-labelledby="overview-title">
+        <div className="section-heading"><h2 id="overview-title">Attendance Overview</h2></div>
+        <div className="overview-grid">
+          <Metric
+            hero
+            label="Current attendance"
+            value={`${overall.current_percentage}%`}
+            hint={`${overall.present_classes} present · ${overall.absent_classes} absent · ${overall.total_classes} total`}
+            status={status}
+          />
+          <Metric label="Target" value={`${overall.target_percentage}%`} hint="Your goal" />
+          <Metric label="Status" value={statusLabel} hint={`Against ${overall.target_percentage}% target`} status={status} />
+        </div>
       </section>
 
-      <section className="calendar-info">
-        <Link to="/settings" className="change-date-control">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-            <line x1="16" y1="2" x2="16" y2="6"/>
-            <line x1="8" y1="2" x2="8" y2="6"/>
-            <line x1="3" y1="10" x2="21" y2="10"/>
+      <section className="dash-section" aria-labelledby="upcoming-title">
+        <div className="section-heading">
+          <h2 id="upcoming-title">Upcoming Classes</h2>
+          <Link className="section-link" to="/settings">Change date</Link>
+        </div>
+        <div className="projection-grid">
+          <Metric
+            label="Classes remaining"
+            value={overall.future_classes}
+            hint={data.exam_date ? <>Until <span className="date-highlight">{formatDate(data.exam_date)}</span></> : "Set a target date"}
+          />
+          <Metric
+            label="Projected attendance"
+            value={`${overall.after_attending_all}%`}
+            hint={overall.future_classes > 0 ? `If you attend all ${overall.future_classes} classes` : "No upcoming classes"}
+            status={overall.target_reachable_in_window ? "good" : "warning"}
+          />
+        </div>
+      </section>
+
+      <section className="dash-section" aria-labelledby="planning-title">
+        <div className="section-heading"><h2 id="planning-title">Attendance Planning</h2></div>
+        <div className="planning-grid">
+          <Metric
+            label="Safe skips"
+            value={overall.can_skip}
+            hint={`Can miss up to ${overall.can_skip} and stay ≥ ${overall.target_percentage}%`}
+          />
+          <Metric
+            label="Must attend"
+            value={overall.need_to_attend}
+            hint={overall.need_to_attend === 0
+              ? `Already above your ${overall.target_percentage}% target`
+              : `Attend the next ${overall.need_to_attend} classes to reach ${overall.target_percentage}%`}
+            status={overall.need_to_attend === 0 ? "good" : "warning"}
+          />
+        </div>
+      </section>
+
+      <div className="info-ticker" role="status">
+        <span className="info-ticker-icon" aria-hidden="true">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="16" x2="12" y2="12" />
+            <line x1="12" y1="8" x2="12.01" y2="8" />
           </svg>
-          Change prediction date
-        </Link>
-      </section>
+        </span>
+        <div className="info-ticker-viewport">
+          <div className="info-ticker-track">
+            <span>Change the prediction date in <Link to="/settings">Settings</Link></span>
+            <span>Attendance calculations are updated accurately at every login</span>
+          </div>
+        </div>
+      </div>
 
-      <section className="dashboard-actions">
+      <section className="dash-link-card">
         <div>
           <h2>Subject details</h2>
-          <p>View attendance, future classes, safe skips, and required attendance for every subject.</p>
+          <p>Attendance, future classes, safe skips and required attendance for every subject.</p>
         </div>
         <Link to="/subjects">View all subjects</Link>
       </section>

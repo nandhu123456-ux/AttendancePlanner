@@ -23,6 +23,7 @@ def ensure_indexes():
         db.timetable_slots.create_index([("student_id", ASCENDING), ("dayOfWeek", ASCENDING), ("startTime", ASCENDING), ("endTime", ASCENDING), ("subjectCode", ASCENDING)], unique=True, name="timetable_slot_identity")
         db.planner_results.create_index("student_id", unique=True, name="planner_student")
         db.users.create_index("student_id", unique=True, name="user_student")
+        db.userinfo.create_index("student_id", unique=True, name="userinfo_student")
         db.adjustment_log.create_index([("student_id", ASCENDING), ("timestamp", ASCENDING)], name="adjustment_student_time")
     except Exception:
         # Index creation failures should not prevent the app from starting.

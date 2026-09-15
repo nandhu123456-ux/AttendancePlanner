@@ -48,7 +48,8 @@ export default function Login() {
     localStorage.setItem("saved_users", JSON.stringify(updated));
   };
 
-    const fetchCaptcha = useCallback(async () => {
+   // Fetch CAPTCHA from the backend using current credentials
+  const fetchCaptcha = useCallback(async () => {
     if (!username.trim() || !password) return;
     setCaptchaLoading(true);
     setError("");
@@ -83,7 +84,7 @@ export default function Login() {
     };
   }, [username, password, captchaImage, captchaLoading, fetchCaptcha]);
 
-    const handleRefreshCaptcha = async () => {
+  const handleRefreshCaptcha = async () => {
     if (!token) return;
     setCaptchaLoading(true);
     setError("");
@@ -98,7 +99,7 @@ export default function Login() {
     }
   };
 
-    // Handle username change - reset CAPTCHA if it was already loaded
+  // Handle username change - reset CAPTCHA if it was already loaded
   const handleUsernameChange = (e) => {
     setUsername(e.target.value);
     // Reset CAPTCHA if user changes credentials after CAPTCHA loaded
@@ -110,20 +111,19 @@ export default function Login() {
     }
   };
 
-  // Handle password change - reset CAPTCHA if it was already loaded
+  // Handle password change - CRITICAL: do NOT reset CAPTCHA on password keystrokes
   const handlePasswordChange = (e) => {
     setPassword(e.target.value);
-    // Reset CAPTCHA if user changes credentials after CAPTCHA loaded
-    if (captchaFetched.current) {
-      setCaptchaImage(null);
-      setCaptcha("");
-      setToken(null);
-      captchaFetched.current = false;
-    }
   };
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    // First click loads CAPTCHA if not yet loaded; second click submits
+    if (!captchaImage) {
+      if (!username.trim() || !password) return;
+      await fetchCaptcha();
+      return;
+    }
     if (!captcha.trim()) {
       setError("Please enter the CAPTCHA.");
       return;
@@ -224,10 +224,10 @@ export default function Login() {
           </div>
         </label>
 
-        {(captchaImage || captchaLoading) && (
+        {true && (
           <div className="captcha-section">
             <label className="captcha-label">CAPTCHA</label>
-            {captchaImage ? (
+                            {captchaImage ? (
               <div className="captcha-image-container">
                 <img src={captchaImage} alt="CAPTCHA" className="captcha-image" />
                 <button
@@ -240,10 +240,15 @@ export default function Login() {
                   ↻
                 </button>
               </div>
-            ) : (
+            ) : captchaLoading ? (
               <div className="captcha-loading">
                 <div className="spinner"></div>
                 Loading CAPTCHA...
+              </div>
+            ) : (
+              <div className="captcha-placeholder">
+                <span className="captcha-placeholder-icon">🔒</span>
+                <span>Enter credentials and click Sign in</span>
               </div>
             )}
             <input
@@ -260,20 +265,18 @@ export default function Login() {
           </div>
         )}
 
-        {!captchaImage && !captchaLoading && username && password && (
-          <button
-            type="button"
-            className="captcha-load-btn"
-            onClick={fetchCaptcha}
-          >
-            Load CAPTCHA
-          </button>
+        {!captchaImage && !captchaLoading && !(username && password) && (
+          <p className="captcha-hint">Enter your Student ID and Password to load CAPTCHA.</p>
         )}
 
         {error && <p className="form-error" role="alert">{error}</p>}
 
-        <button type="submit" disabled={loading || !captchaImage || !captcha.trim()}>
-          {loading ? "Signing in..." : "Sign in"}
+        <button type="submit" disabled={loading || captchaLoading || !username.trim() || !password}>
+          {loading
+            ? "Signing in..."
+            : captchaLoading
+            ? "Loading CAPTCHA..."
+            : "Sign in"}
         </button>
          
         <div className="trust-divider">

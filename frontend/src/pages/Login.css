@@ -343,3 +343,26 @@
   box-shadow: none !important;
   border-radius: 0 !important;
 }
+
+/* CAPTCHA placeholder & hint */
+.captcha-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.captcha-placeholder-icon {
+  font-size: 1.2rem;
+}
+
+.captcha-hint {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  text-align: center;
+  padding: var(--spacing-xs) 0;
+}

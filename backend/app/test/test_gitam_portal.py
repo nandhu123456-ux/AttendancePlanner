@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import unittest
 from unittest.mock import Mock, patch
 
-from services.gitam_portal import complete_login, fetch_current_data, init_captcha_session, parse_attendance_html, parse_subjects, parse_timetable, refresh_captcha_and_fields
+from services.gitam_portal import complete_login, fetch_current_data, fetch_student_info, init_captcha_session, parse_attendance_html, parse_student_info, parse_subjects, parse_timetable, refresh_captcha_and_fields
 
 
 class Response:
@@ -22,10 +22,9 @@ class Response:
 
 class PortalParsingTests(unittest.TestCase):
     def test_authentication_uses_one_session_across_gstudent_and_glearn(self):
-        login_form = "".join(f"<input name='{name}' value='x'>" for name in ("__VIEWSTATE", "__VIEWSTATEGENERATOR", "__EVENTVALIDATION", "hiddenCsrfToken"))
         session = Mock()
         session.post.return_value = Response(headers={"Location": "/callback"})
-        session.get.side_effect = [Response(text=login_form), Response(url="https://login.gitam.edu/callback"), Response(url="https://gstudent.gitam.edu/Home"), Response(text="window.location.href='https://glearn.gitam.edu/sso'"), Response(url="https://glearn.gitam.edu/sso"), Response(url="https://glearn.gitam.edu/student/std_dashboard_main")]
+        session.get.side_effect = [Response(url="https://login.gitam.edu/callback"), Response(url="https://gstudent.gitam.edu/Home"), Response(text="window.location.href='https://glearn.gitam.edu/sso'"), Response(url="https://glearn.gitam.edu/sso"), Response(url="https://glearn.gitam.edu/student/std_dashboard_main")]
         self.assertIs(complete_login(session, "student", "password", "ABC123", {
             "__VIEWSTATE": "x",
             "__VIEWSTATEGENERATOR": "x",
@@ -85,3 +84,57 @@ class PortalParsingTests(unittest.TestCase):
         self.assertEqual(by_code["24CSEN2041"]["percentage"], 84.21)
         self.assertEqual(by_code["24CSEN2202P"]["presentClasses"], 13)
         self.assertEqual(by_code["24CSEN2202P"]["totalClasses"], 15)
+
+
+class StudentInfoTests(unittest.TestCase):
+    def setUp(self):
+        self.html = """
+        <html><body>
+            <input id="regdno" name="regdno" value="24CSEN001" />
+            <input id="name" name="name" value="John Doe" />
+            <input id="EMAILID" name="EMAILID" value="john@example.com" />
+            <img class="img-fluid" src="https://doeresults.gitam.edu/photo/img.aspx?id=24CSEN001" />
+        </body></html>
+        """
+
+    def test_parse_student_info_extracts_all_fields(self):
+        info = parse_student_info(self.html)
+        self.assertEqual(info["student_id"], "24CSEN001")
+        self.assertEqual(info["full_name"], "John Doe")
+        self.assertEqual(info["email"], "john@example.com")
+        self.assertEqual(info["photo_url"], "https://doeresults.gitam.edu/photo/img.aspx?id=24CSEN001")
+
+    def test_parse_student_info_handles_missing_photo(self):
+        html = self.html.replace(' <img class="img-fluid" src="https://doeresults.gitam.edu/photo/img.aspx?id=24CSEN001" />', '')
+        info = parse_student_info(html)
+        self.assertEqual(info["photo_url"], None)
+        self.assertEqual(info["student_id"], "24CSEN001")
+
+    def test_parse_student_info_handles_missing_inputs(self):
+        html = "<html><body><div>no inputs</div></body></html>"
+        info = parse_student_info(html)
+        self.assertEqual(info["student_id"], None)
+        self.assertEqual(info["full_name"], None)
+        self.assertEqual(info["email"], None)
+        self.assertEqual(info["photo_url"], None)
+
+    def test_fetch_student_info_uses_same_session(self):
+        """Verify fetch_student_info uses the same session and hits GetStudentData."""
+        session = Mock()
+        session.get.return_value = Response(text=self.html, url="https://gstudent.gitam.edu/Home/GetStudentData")
+        session.post.return_value = Response(text="ignored")
+        info = fetch_student_info(session)
+        self.assertEqual(info["student_id"], "24CSEN001")
+        self.assertEqual(info["full_name"], "John Doe")
+        self.assertEqual(info["email"], "john@example.com")
+        self.assertEqual(info["photo_url"], "https://doeresults.gitam.edu/photo/img.aspx?id=24CSEN001")
+        # Verify GetStudentData was requested
+        called_url = session.get.call_args[0][0]
+        self.assertIn("GetStudentData", called_url)
+
+    def test_fetch_student_info_returns_none_on_failure(self):
+        session = Mock()
+        session.get.side_effect = Exception("network error")
+        info = fetch_student_info(session)
+        self.assertIsNone(info)
+

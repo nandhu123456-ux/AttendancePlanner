@@ -1,5 +1,6 @@
 import os
 import logging
+import requests
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -17,9 +18,13 @@ from app.services.credential_service import (
 from app.services.gitam_portal import (
     InvalidCredentials,
     PortalError,
+    GSTUDENT_HOME_URL,
+    TIMEOUT as PORTAL_TIMEOUT,
+    _headers,
     complete_login,
     fetch_captcha_image,
     fetch_current_data,
+    fetch_student_info,
     init_captcha_session,
     refresh_captcha_and_fields,
 )
@@ -43,7 +48,7 @@ from app.services.security import (
     verify_token,
 )
 
-from app.services.session_store import save_session
+from app.services.session_store import get_session, save_session
 
 from app.services.sync_service import sync_portal_data
 
@@ -60,6 +65,7 @@ from app.services.calendar_service import (
 
 router = APIRouter()
 MAX_ADJUSTMENTS = int(os.getenv("MAX_CUSTOM_ADJUSTMENTS_PER_MONTH", "4"))
+TIMEOUT = float(os.getenv("PORTAL_REQUEST_TIMEOUT", "20"))
 
 class LoginRequest(BaseModel):
     username: str = Field(
@@ -112,6 +118,28 @@ def _plan_or_404(student_id):
     if not result: raise HTTPException(404, "No attendance data found. Sync after logging in.")
     return result
 
+
+def save_userinfo(student_id: str, info: dict):
+    """Insert or update a userinfo document. Preserves existing non-null fields
+    when the portal response temporarily lacks a field."""
+    db = get_database()
+    collection = db["userinfo"]
+    now = datetime.now(timezone.utc)
+    existing = collection.find_one({"student_id": student_id}, {"_id": 0})
+    update_fields = {"updated_at": now}
+    for field in ("full_name", "email", "photo_url"):
+        value = info.get(field)
+        if value is not None:
+            update_fields[field] = value
+        # If existing has a non-null value and new value is None, keep existing
+        if value is None and existing and existing.get(field) is not None:
+            update_fields[field] = existing[field]
+    collection.update_one(
+        {"student_id": student_id},
+        {"$set": update_fields, "$setOnInsert": {"student_id": student_id}},
+        upsert=True,
+    )
+
 @router.post("/login/init")
 def login_init(data: LoginRequest):
     """Step 1: Initialize login - fetch CAPTCHA for manual entry."""
@@ -162,6 +190,16 @@ def login_complete(data: CaptchaLoginRequest):
         upsert=True,
     )
     save_session(entry["username"], session)
+
+    # Fetch and save student profile info (Non-fatal: login continues even if this fails)
+    student_info = None
+    try:
+        student_info = fetch_student_info(session)
+        if student_info:
+            save_userinfo(entry["username"], student_info)
+            logger.info("PROFILE: Saved userinfo for user=%s", entry["username"])
+    except Exception:
+        logger.warning("PROFILE: Deferred for user=%s; profile will refresh on next login", entry["username"])
 
     # Every successful login must immediately refresh attendance: reuse the
     # just-authenticated portal session to fetch the latest subject-level data
@@ -427,3 +465,43 @@ def simulate(student_id: str, data: SimulationRequest, user=Depends(verify_token
             "percentage": round(100 * present / total, 2) if total else 0,
         }
     return {"classes": classes, "simulation": simulated}
+
+
+@router.get("/userinfo/{student_id}")
+def get_userinfo(student_id: str, user=Depends(verify_token)):
+    """Retrieve the logged-in student's profile from the userinfo collection."""
+    student_id = _student_for(student_id, user)
+    db = get_database()
+    doc = db.userinfo.find_one({"student_id": student_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Profile not yet available. Please log in once to sync your profile.")
+    return {
+        "student_id": doc.get("student_id"),
+        "full_name": doc.get("full_name"),
+        "email": doc.get("email"),
+        "photo_url": doc.get("photo_url"),
+        "updated_at": doc.get("updated_at"),
+    }
+
+
+@router.get("/userinfo/{student_id}/photo")
+def get_userinfo_photo(student_id: str, user=Depends(verify_token)):
+    """Proxy the GITAM profile photo so the browser never receives portal cookies."""
+    from fastapi.responses import Response
+    student_id = _student_for(student_id, user)
+    db = get_database()
+    doc = db.userinfo.find_one({"student_id": student_id}, {"photo_url": 1})
+    if not doc or not doc.get("photo_url"):
+        raise HTTPException(404, "Profile photo not available")
+    photo_url = doc["photo_url"]
+    session = get_session(student_id)
+    headers = _headers(Referer=GSTUDENT_HOME_URL, Accept="image/*,*/*")
+    try:
+        if session:
+            resp = session.get(photo_url, headers=headers, timeout=PORTAL_TIMEOUT)
+        else:
+            resp = requests.get(photo_url, headers=headers, timeout=PORTAL_TIMEOUT)
+        resp.raise_for_status()
+        return Response(content=resp.content, media_type=resp.headers.get("Content-Type", "image/jpeg"))
+    except Exception:
+        raise HTTPException(502, "Could not fetch profile photo from portal")

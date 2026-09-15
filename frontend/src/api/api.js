@@ -27,3 +27,5 @@ export const updateSettings = (studentId, settings) => API.put(`/settings/${stud
 export const simulatePlanner = (studentId, options) => API.post(`/planner/simulate/${studentId}`, options);
 export const saveCustomAdjustment = (studentId, adjustment) => API.post(`/custom-adjustment/${studentId}`, adjustment);
 export const setTargetType = (studentId, targetData) => API.post(`/target-type/${studentId}`, targetData);
+export const getUserInfo = (studentId) => API.get(`/userinfo/${studentId}`);
+export const getUserPhoto = (studentId) => API.get(`/userinfo/${studentId}/photo`, { responseType: "blob" });

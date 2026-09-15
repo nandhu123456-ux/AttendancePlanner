@@ -162,51 +162,6 @@ def complete_login(session: requests.Session, username: str, password: str, capt
         raise PortalError("The college portal is temporarily unavailable.") from exc
 
 
-def fetch_student_info(session: requests.Session) -> dict | None:
-    """Fetch student profile data from GITAM portal using an already-authenticated session.
-
-    This is an ADDITIONAL request after GET /Home. It uses the SAME authenticated
-    session — no second login, no new CAPTCHA. Profile fetch failure is non-fatal:
-    returns None so login can still proceed.
-    """
-    try:
-        resp = session.get(
-            f"{GSTUDENT_HOME_URL}/GetStudentData",
-            headers=_headers(Referer=GSTUDENT_HOME_URL, Accept=HTML_ACCEPT),
-            allow_redirects=True,
-            timeout=TIMEOUT,
-        )
-        resp.raise_for_status()
-        return parse_student_info(resp.text)
-    except (requests.RequestException, KeyError, TypeError) as exc:
-        logger.warning("STUDENT_INFO: Failed to fetch student data: %s", type(exc).__name__)
-        return None
-    except Exception as exc:
-        logger.warning("STUDENT_INFO: Unexpected error fetching student data: %s", type(exc).__name__)
-        return None
-
-
-def parse_student_info(html: str) -> dict:
-    """Parse the GetStudentData HTML response to extract profile information."""
-    soup = BeautifulSoup(html, "html.parser")
-
-    name_input = soup.find("input", {"id": "name"})
-    email_input = soup.find("input", {"id": "EMAILID"})
-    reg_input = soup.find("input", {"id": "regdno"})
-
-    photo_img = soup.find(
-        "img",
-        src=re.compile(r"doeresults\.gitam\.edu/photo/img\.aspx\?id=", re.I),
-    )
-
-    return {
-        "student_id": reg_input.get("value", "").strip() if reg_input else None,
-        "full_name": name_input.get("value", "").strip() if name_input else None,
-        "email": email_input.get("value", "").strip() if email_input else None,
-        "photo_url": photo_img.get("src", "").strip() if photo_img else None,
-    }
-
-
 def _number(value: Any, default: int = 0) -> int:
     try:
         return max(0, int(float(str(value).strip())))

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Nav from "../components/Nav";
+import PageHeader from "../components/PageHeader";
 import { getPlanner } from "../api/api";
 import "./Dashboard.css";
 
@@ -10,21 +11,10 @@ export default function Prediction() {
   const { overall } = data;
   return (
     <main className="dashboard">
-      <header>
-        <div>
-          <div className="brand-header-inline">
-            <svg width="24" height="24" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M20 4L4 14v12l16 10 16-10V14L20 4z" stroke="currentColor" strokeWidth="2" fill="none"/>
-              <path d="M20 4v32M4 14l16 10 16-10M4 26l16-10 16 10" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-              <circle cx="20" cy="18" r="4" fill="currentColor"/>
-            </svg>
-            <p className="eyebrow">TRACK_75</p>
-          </div>
-          <h1>Prediction</h1>
-          <p className="sync-note">Until {data.exam_date}</p>
-        </div>
-        <Nav />
-      </header>
+      <PageHeader title="Prediction">
+        <p className="sync-note">Until {data.exam_date}</p>
+      </PageHeader>
+      <Nav />
       <section className="prediction-card">
         <p>Projected attendance if you attend every scheduled class</p>
         <strong>{overall.after_attending_all}%</strong>
