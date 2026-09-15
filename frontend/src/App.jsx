@@ -4,13 +4,18 @@ import Settings from "./pages/Settings";
 import Subjects from "./pages/Subjects";
 import Prediction from "./pages/Prediction";
 import Login from "./pages/Login";
+import OfflineBanner from "./components/OfflineBanner";
+import InstallPrompt from "./components/InstallPrompt";
 
 function ProtectedRoute({ children }) {
   return localStorage.getItem("token") ? children : <Navigate to="/login" replace />;
 }
 
 export default function App() {
-  return <BrowserRouter><Routes>
+  return <BrowserRouter>
+    <OfflineBanner />
+    <InstallPrompt />
+    <Routes>
     <Route path="/login" element={<Login />} />
     <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
     <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
@@ -19,3 +24,4 @@ export default function App() {
     <Route path="*" element={<Navigate to="/dashboard" replace />} />
   </Routes></BrowserRouter>;
 }
+
