@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 def _now(): return datetime.now(timezone.utc)
 
 # How long MongoDB data is trusted as current without contacting the portal.
-FRESHNESS_MINUTES = float(os.getenv("SYNC_FRESHNESS_MINUTES", "15"))
+FRESHNESS_MINUTES = float(os.getenv("SYNC_FRESHNESS_MINUTES", "3"))
 # Minimum spacing between silent portal re-login attempts per student, so a
 # portal that enforces its CAPTCHA is never hammered with failed logins.
 REAUTH_COOLDOWN_SECONDS = float(os.getenv("REAUTH_COOLDOWN_SECONDS", "120"))
