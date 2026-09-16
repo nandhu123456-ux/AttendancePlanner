@@ -50,7 +50,7 @@ from app.services.security import (
 
 from app.services.session_store import get_session, save_session
 
-from app.services.sync_service import sync_portal_data
+from app.services.sync_service import ensure_fresh_portal_data, sync_portal_data
 
 from app.services.calendar_service import (
     get_applicable_academic_calendar,
@@ -262,21 +262,43 @@ def login(data: LoginRequest):
 
 @router.get("/planner/{student_id}")
 def get_planner(student_id: str, user=Depends(verify_token)):
-    student_id = _student_for(student_id, user); result = _plan_or_404(student_id)
+    student_id = _student_for(student_id, user)
+    # Freshness guard: a valid TRACK_75 JWT must never serve stale portal data
+    # as current. If the stored data is old, try a silent portal re-sync
+    # (live session, then stored-credential re-login). If re-authentication
+    # fails definitively, the student's tokens have been invalidated and the
+    # client must log in again.
+    freshness = ensure_fresh_portal_data(student_id)
+    if freshness["status"] == "invalidated":
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED,
+            "Your GITAM session has expired. Please log in again to refresh your attendance.",
+        )
+    result = _plan_or_404(student_id)
     # Future classes are generated dynamically from the timetable + academic
     # calendar (and are never persisted), so a snapshot built on an earlier day
     # would report yesterday's remaining classes. Rebuild in memory when the
-    # stored snapshot was generated on a different day; keep the stored
-    # snapshot as fallback if the rebuild cannot run (e.g., no target date).
+    # stored snapshot was generated on a different day, or when portal data was
+    # just re-synced; keep the stored snapshot as fallback if the rebuild
+    # cannot run (e.g., no target date).
     generated_at = result.get("generated_at")
-    if isinstance(generated_at, datetime) and generated_at.date() != datetime.now(timezone.utc).date():
+    needs_rebuild = freshness["status"] == "resynced" or (
+        isinstance(generated_at, datetime) and generated_at.date() != datetime.now(timezone.utc).date()
+    )
+    if needs_rebuild:
         try:
             result = build_plan_from_database(student_id)
         except Exception:
-            logger.warning("PLANNER: daily rebuild failed for user=%s; serving stored snapshot", student_id)
+            logger.warning("PLANNER: rebuild failed for user=%s; serving stored snapshot", student_id)
     account = get_database().users.find_one({"student_id": student_id}, {"_id": 0, "lastSyncAt": 1, "last_sync_status": 1, "customAdjustmentCount": 1, "customAdjustmentMonth": 1}) or {}
     used = account.get("customAdjustmentCount", 0) if account.get("customAdjustmentMonth") == date.today().strftime("%Y-%m") else 0
-    result["sync_status"] = {"last_portal_sync_at": account.get("lastSyncAt"), **account.get("last_sync_status", {})}
+    sync_status = {"last_portal_sync_at": account.get("lastSyncAt"), **account.get("last_sync_status", {})}
+    if freshness["status"] == "unreachable":
+        # The portal could not be reached: label the stored snapshot as stale
+        # so it is never presented as current data.
+        sync_status["stale"] = True
+        sync_status["stale_reason"] = freshness.get("reason")
+    result["sync_status"] = sync_status
     result["custom_adjustments"] = {"used": used, "limit": MAX_ADJUSTMENTS}
     return result
 

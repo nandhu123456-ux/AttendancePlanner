@@ -34,7 +34,7 @@ Prerequisites: a MongoDB instance — [MongoDB Atlas](https://www.mongodb.com/cl
 2. Create a new **Web Service** → **Docker** pointing at the repo's `Dockerfile` (or import `render.yaml`, after replacing the repo URL).
 3. Render builds the image, injects `$PORT`, and deploys with free HTTPS.
 
-The frontend is served from the same origin and refreshes attendance automatically at every login. No background scheduler runs; attendance is always the latest from GITAM when you sign in.
+The frontend is served from the same origin and refreshes attendance automatically at every login. No background scheduler runs; attendance is always the latest from GITAM when you sign in. Additionally, when the Dashboard is opened with data older than `SYNC_FRESHNESS_MINUTES` (default 15), the API silently re-syncs: it reuses the live portal session, or re-authenticates with the stored encrypted credentials. If that re-authentication fails definitively (e.g. the portal enforces its CAPTCHA), the TRACK_75 session is invalidated server-side and the user must log in again — stale attendance is never presented as current. During a transient portal outage, the last synced snapshot is served but flagged as stale (`sync_status.stale`). Attendance/API responses are never cached by the PWA service worker.
 
 ### Option B — Linux VPS / Docker Compose (always-on)
 

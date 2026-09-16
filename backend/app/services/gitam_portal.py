@@ -162,6 +162,21 @@ def complete_login(session: requests.Session, username: str, password: str, capt
         raise PortalError("The college portal is temporarily unavailable.") from exc
 
 
+def attempt_relogin(username: str, password: str) -> requests.Session:
+    """Attempt a silent portal re-login using stored credentials (no CAPTCHA).
+
+    Reuses the exact existing login handshake and submits the credentials with
+    an empty CAPTCHA field. Some portal deployments accept this; when the
+    portal enforces its CAPTCHA the response carries no redirect and the
+    existing handshake raises InvalidCredentials. This never solves, bypasses,
+    or weakens the CAPTCHA - it only reuses stored credentials through the
+    same login flow the user completes manually.
+    """
+    session = requests.Session()
+    form_fields = _parse_form_fields(session)
+    return complete_login(session, username, password, "", form_fields)
+
+
 def fetch_student_info(session: requests.Session) -> dict | None:
     """Fetch student profile data from GITAM portal using an already-authenticated session.
 
