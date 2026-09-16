@@ -246,8 +246,8 @@ export default function Login() {
               </div>
             ) : (
               <div className="captcha-placeholder">
-                <span className="captcha-placeholder-icon">🔒</span>
-                <span>Enter credentials and click Sign in</span>
+                <span className="captcha-placeholder-icon"></span>
+                <span></span>
               </div>
             )}
             <input
@@ -265,7 +265,7 @@ export default function Login() {
         )}
 
         {!captchaImage && !captchaLoading && !(username && password) && (
-          <p className="captcha-hint">Enter your Student ID and Password to load CAPTCHA.</p>
+          <p className="captcha-hint">Share this with your classmates!</p>
         )}
 
         {error && <p className="form-error" role="alert">{error}</p>}
@@ -279,7 +279,7 @@ export default function Login() {
         </button>
          
         <div className="trust-divider">
-          <span className="trust-line">Share this with your classmates!</span>
+          <span className="trust-line">Built by Nanda Vardhan Reddy 😊</span>
         </div>
       </form>
     </main>
